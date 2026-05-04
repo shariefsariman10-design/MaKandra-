@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MaKandra – Vind Diensten in Suriname</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600;9..144,700;9..144,900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ═══════════════════════════════════ NAVIGATION ═══════════════════════════════════ -->
+<nav id="navbar">
+  <div class="nav-container">
+    <div class="nav-logo" onclick="showView('home')">
+      <img src="MKDRA.png" alt="MaKandra Logo" class="nav-logo-img" />
+    </div>
+    <div class="nav-links">
+      <a class="nav-link" onclick="showView('browse')">Diensten</a>
+      <a class="nav-link" onclick="browseByCategory('')">Categorieën</a>
+      <a class="nav-link" onclick="showFavorites()"> Favorieten</a>
+    </div>
+    <div class="nav-auth" id="nav-auth">
+      <button class="btn-ghost" onclick="openAuthModal('login')">Inloggen</button>
+      <button class="btn-secondary" onclick="openAuthModal('signup')">Aanmelden</button>
+      <button class="btn-accent" onclick="openAuthModal('provider')">Dienstverlener worden</button>
+    </div>
+    <div class="nav-user hidden" id="nav-user">
+      <div class="user-pill" onclick="toggleUserMenu()">
+        <div class="user-avatar-sm" id="nav-avatar">?</div>
+        <span id="nav-username">Gebruiker</span>
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d="M2 4l4 4 4-4"/></svg>
+      </div>
+      <div class="user-dropdown hidden" id="user-dropdown">
+        <a onclick="showView('dashboard'); toggleUserMenu()">
+          <span>👤</span> Mijn Dashboard
+        </a>
+        <a onclick="showFavorites(); toggleUserMenu()">
+          <span>❤️</span> Favorieten
+        </a>
+        <div class="dropdown-divider"></div>
+        <a onclick="logout()" class="logout-link">
+          <span>🚪</span> Uitloggen
+        </a>
+      </div>
+    </div>
+    <button class="nav-mobile-btn" onclick="toggleMobileMenu()">☰</button>
+  </div>
+  <div class="mobile-menu hidden" id="mobile-menu">
+    <a onclick="showView('browse'); toggleMobileMenu()">Diensten</a>
+    <a onclick="showFavorites(); toggleMobileMenu()">❤️ Favorieten</a>
+    <a onclick="openAuthModal('login'); toggleMobileMenu()">Inloggen</a>
+    <a onclick="openAuthModal('signup'); toggleMobileMenu()">Aanmelden</a>
+    <a onclick="openAuthModal('provider'); toggleMobileMenu()" class="mobile-provider-btn">Dienstverlener worden</a>
+  </div>
+</nav>
+
+
+<!-- ═══════════════════════════════════ HOME VIEW ═══════════════════════════════════ -->
+<div id="view-home" class="view active">
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-grain"></div>
+    <div class="hero-container">
+      <div class="hero-left">
+        <div class="hero-badge">
+          <span class="badge-flag">🇸🇷</span>
+          Suriname's #1 Diensten Platform
+        </div>
+        <h1 class="hero-title">
+          Vind de beste<br>
+          <em>dienstverleners</em><br>
+          in Suriname
+        </h1>
+        <p class="hero-subtitle">
+          Verbind direct met gekwalificeerde professionals in jouw district. Nul commissie. Echte resultaten.
+        </p>
+
+        <div class="hero-search-box">
+          <div class="search-input-wrap">
+            <span class="search-ico">
+              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            </span>
+            <input type="text" id="hero-search" placeholder="Naam van dienst (bijv. elektricien, schilder)" />
+          </div>
+          <div class="search-district-wrap">
+            <select id="hero-district">
+              <option value="">Alle districten</option>
+              <option>Paramaribo</option>
+              <option>Wanica</option>
+              <option>Nickerie</option>
+              <option>Coronie</option>
+              <option>Saramacca</option>
+              <option>Commewijne</option>
+              <option>Marowijne</option>
+              <option>Para</option>
+              <option>Brokopondo</option>
+              <option>Sipaliwini</option>
+            </select>
+          </div>
+          <button class="btn-search" onclick="heroSearch()">Zoeken</button>
+        </div>
+
+        <div class="hero-stats">
+          <div class="hero-stat">
+            <strong>2.400+</strong>
+            <span>Dienstverleners</span>
+          </div>
+          <div class="stat-sep"></div>
+          <div class="hero-stat">
+            <strong>18.000+</strong>
+            <span>Diensten voltooid</span>
+          </div>
+          <div class="stat-sep"></div>
+          <div class="hero-stat">
+            <strong>0%</strong>
+            <span>Commissie</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-right">
+        <div class="hero-cards">
+          <div class="hero-card hc-1">
+            <div class="hc-avatar" style="background:#1B4332">KD</div>
+            <div class="hc-info">
+              <strong>Kevin D.</strong>
+              <small>Elektricien</small>
+            </div>
+            <div class="hc-score" data-star="4.9"></div>
+          </div>
+          <div class="hero-card hc-2">
+            <div class="hc-avatar" style="background:#B45309">MR</div>
+            <div class="hc-info">
+              <strong>Maria R.</strong>
+              <small>Schoonmaak</small>
+            </div>
+            <div class="hc-score" data-star="4.8"></div>
+          </div>
+          <div class="hero-card hc-3">
+            <div class="hc-avatar" style="background:#DB2777">JS</div>
+            <div class="hc-info">
+              <strong>Jerome S.</strong>
+              <small>Schilder</small>
+            </div>
+            <div class="hc-score" data-star="5.0"></div>
+          </div>
+          <div class="hero-card hc-4">
+            <div class="hc-avatar" style="background:#7C3AED">NB</div>
+            <div class="hc-info">
+              <strong>Nisha B.</strong>
+              <small>Fotografie</small>
+            </div>
+            <div class="hc-score" data-star="4.9"></div>
+          </div>
+          <div class="hero-orb orb-1"></div>
+          <div class="hero-orb orb-2"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TOP 10 PROVIDERS – with background image -->
+  <section class="section top10-section">
+    <div class="top10-bg-overlay"></div>
+    <div class="container" style="position:relative;z-index:2">
+      <div class="section-head">
+        <div class="section-eyebrow top-badge">🏆 TOP 10</div>
+        <h2 class="section-title light">Beste <em>Dienstverleners</em></h2>
+        <p class="section-sub light">Gerangschikt op vertrouwensscore — vertrouwd door duizenden Surinamers</p>
+      </div>
+      <div class="providers-grid" id="top-providers-grid">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+  </section>
+
+  <!-- CATEGORIES -->
+  <section class="section">
+    <div class="container">
+      <div class="section-head">
+        <div class="section-eyebrow">Bladeren op categorie</div>
+        <h2 class="section-title">Populaire <em>Categorieën</em></h2>
+        <p class="section-sub">Vind de juiste professional voor elke behoefte</p>
+      </div>
+      <div class="categories-grid" id="categories-grid">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="section">
+    <div class="container">
+      <div class="section-head">
+        <div class="section-eyebrow">Zo werkt het</div>
+        <h2 class="section-title">Hoe werkt <em>MaKandra</em>?</h2>
+      </div>
+      <div class="steps-grid">
+        <div class="step-card reveal">
+          <div class="step-num">01</div>
+          <div class="step-icon-wrap">🔍</div>
+          <h3>Zoek een dienst</h3>
+          <p>Voer de naam van de dienst in die je nodig hebt en filter op jouw district in Suriname.</p>
+        </div>
+        <div class="step-card reveal">
+          <div class="step-num">02</div>
+          <div class="step-icon-wrap">👤</div>
+          <h3>Bekijk profielen</h3>
+          <p>Vergelijk vertrouwensscores, portfolio's, werktijden en beoordelingen van dienstverleners.</p>
+        </div>
+        <div class="step-card reveal">
+          <div class="step-num">03</div>
+          <div class="step-icon-wrap">📩</div>
+          <h3>Neem contact op</h3>
+          <p>Stuur direct een bericht naar de dienstverlener. Geen commissie, directe communicatie.</p>
+        </div>
+        <div class="step-card reveal">
+          <div class="step-num">04</div>
+          <div class="step-icon-wrap">⭐</div>
+          <h3>Laat een beoordeling achter</h3>
+          <p>Help anderen door jouw ervaring te delen en bij te dragen aan de gemeenschap.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA BAND -->
+  <section class="section section-cta-bg">
+    <div class="container">
+      <div class="cta-band reveal">
+        <div class="cta-left">
+          <h2>Bent u een dienstverlener?<br><em>Word vandaag lid</em></h2>
+          <p>Bereik duizenden klanten in heel Suriname. Maak een gratis profiel aan en begin vandaag. Geen commissie, nooit.</p>
+          <button class="btn-cta-big" onclick="openAuthModal('provider')">
+            Profiel aanmaken 
+          </button>
+        </div>
+        <div class="cta-nums">
+          <div class="cta-num-item"><strong>2.400+</strong><span>Actieve dienstverleners</span></div>
+          <div class="cta-num-item"><strong>18.000+</strong><span>Voltooide opdrachten</span></div>
+          <div class="cta-num-item"><strong>0%</strong><span>Commissie altijd</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <div class="footer-logo">
+            <img src="MKDRA.png" alt="MaKandra" style="height:100px;width:auto;" />
+          </div>
+          <p>MaKandra staat voor samenwerking en vooruitgang. Wij geloven in persoonlijke service en duurzame relaties, zodat elke klant zich gehoord en geholpen voelt.</p>
+          <div class="footer-flag">🇸🇷 Trots gemaakt in Suriname</div>
+        </div>
+        <div class="footer-col">
+          <h4>Diensten</h4>
+          <a onclick="browseByCategory('Schilders')">Schilders</a>
+          <a onclick="browseByCategory('Elektriciens')">Elektriciens</a>
+          <a onclick="browseByCategory('Hoveniers')">Hoveniers</a>
+          <a onclick="browseByCategory('Schoonmaak')">Schoonmaak</a>
+          <a onclick="browseByCategory('Overig')">Overig</a>
+        </div>
+        <div class="footer-col">
+          <h4>Platform</h4>
+          <a onclick="showView('browse')">Alle dienstverleners</a>
+          <a onclick="openAuthModal('provider')">Dienstverlener worden</a>
+          <a onclick="openAuthModal('signup')">Account aanmaken</a>
+          <a onclick="showFavorites()">Mijn favorieten</a>
+        </div>
+        <div class="footer-col">
+          <h4>Districten</h4>
+          <a onclick="browseByDistrict('Paramaribo')">Paramaribo</a>
+          <a onclick="browseByDistrict('Wanica')">Wanica</a>
+          <a onclick="browseByDistrict('Nickerie')">Nickerie</a>
+          <a onclick="browseByDistrict('Commewijne')">Commewijne</a>
+          <a onclick="browseByDistrict('Para')">Para</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        © 2025 MaKandra · Alle rechten voorbehouden · Suriname
+      </div>
+    </div>
+  </footer>
+</div>
+
+
+<!-- ═══════════════════════════════════ BROWSE VIEW ═══════════════════════════════════ -->
+<div id="view-browse" class="view">
+  <div class="browse-header">
+    <div class="container">
+      <h1>Vind een <em>Dienstverlener</em></h1>
+      <p>Blader door onze gecertificeerde professionals in heel Suriname</p>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="browse-layout">
+      <aside class="browse-sidebar">
+        <div class="sidebar-section">
+          <span class="sidebar-label">Naam van dienst</span>
+          <div class="sidebar-search-wrap">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="text" id="browse-search" placeholder="Naam van dienst zoeken…" oninput="applyFilters()" />
+          </div>
+        </div>
+        <div class="sidebar-section">
+          <span class="sidebar-label">District</span>
+          <select id="filter-district" onchange="applyFilters()">
+            <option value="">Alle districten</option>
+            <option>Paramaribo</option><option>Wanica</option><option>Nickerie</option>
+            <option>Coronie</option><option>Saramacca</option><option>Commewijne</option>
+            <option>Marowijne</option><option>Para</option><option>Brokopondo</option>
+            <option>Sipaliwini</option>
+          </select>
+        </div>
+        <div class="sidebar-section">
+          <span class="sidebar-label">Sorteren</span>
+          <select id="filter-sort" onchange="applyFilters()">
+            <option value="score">Beste score</option>
+            <option value="reviews">Meeste beoordelingen</option>
+            <option value="name">Naam A–Z</option>
+          </select>
+        </div>
+        <div class="sidebar-section">
+          <span class="sidebar-label">Categorieën</span>
+          <div class="sidebar-cat-list" id="sidebar-cats">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+        <button class="btn-reset" onclick="resetFilters()">↺ Filters wissen</button>
+      </aside>
+
+      <main class="browse-main">
+        <div class="browse-results-bar">
+          <span id="results-count">Laden…</span>
+        </div>
+        <div class="providers-grid" id="browse-grid">
+          <!-- Rendered by JS -->
+        </div>
+        <div class="empty-state hidden" id="browse-empty">
+          <div class="empty-icon">🔍</div>
+          <h3>Geen resultaten</h3>
+          <p>Probeer andere zoektermen of verwijder filters</p>
+          <button class="btn-primary" onclick="resetFilters()">Filters wissen</button>
+        </div>
+      </main>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════ FAVORITES VIEW ═══════════════════════════════════ -->
+<div id="view-favorites" class="view">
+  <div class="browse-header">
+    <div class="container">
+      <h1> Mijn <em>Favorieten</em></h1>
+      <p>Beheer uw favoriete en opgeslagen dienstverleners</p>
+    </div>
+  </div>
+  <div class="container">
+    <div id="favorites-content" style="padding: 40px 0 80px;">
+      <!-- Rendered by JS -->
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════ PROFILE VIEW ═══════════════════════════════════ -->
+<div id="view-profile" class="view">
+  <div id="profile-content"><!-- JS renders this --></div>
+</div>
+
+
+<!-- ═══════════════════════════════════ DASHBOARD VIEW ═══════════════════════════════════ -->
+<div id="view-dashboard" class="view">
+  <div class="container">
+    <div id="dashboard-content"><!-- JS renders this --></div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════ AUTH MODAL ═══════════════════════════════════ -->
+<div id="auth-overlay" class="overlay hidden" onclick="closeAuthModal(event)">
+  <div class="modal" id="auth-modal">
+    <button class="modal-x" onclick="closeAuthModal()">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+
+    <div class="modal-tabs">
+      <button class="modal-tab active" id="tab-btn-login" onclick="switchAuthTab('login')">Inloggen</button>
+      <button class="modal-tab" id="tab-btn-signup" onclick="switchAuthTab('signup')">Aanmelden</button>
+      <button class="modal-tab tab-provider-btn" id="tab-btn-provider" onclick="switchAuthTab('provider')">Dienstverlener worden</button>
+    </div>
+
+    <!-- LOGIN -->
+    <div class="modal-body" id="tab-login">
+      <div class="modal-hero-text">
+        <h2>Welkom terug </h2>
+        <p>Log in op jouw MaKandra account</p>
+      </div>
+      <div class="form-group">
+        <label>E-mailadres</label>
+        <input type="email" id="login-email" placeholder="jouw@email.com" />
+      </div>
+      <div class="form-group">
+        <label>Wachtwoord</label>
+        <input type="password" id="login-password" placeholder="••••••••" />
+      </div>
+      <div class="form-error hidden" id="login-error"></div>
+      <button class="btn-primary btn-full" onclick="handleLogin()">Inloggen</button>
+      <p class="form-footer">Nog geen account? <a onclick="switchAuthTab('signup')">Aanmelden</a></p>
+    </div>
+
+    <!-- SIGNUP USER -->
+    <div class="modal-body hidden" id="tab-signup">
+      <div class="modal-hero-text">
+        <h2>Account aanmaken</h2>
+        <p>Maak een gratis klantaccount aan</p>
+      </div>
+      <div class="form-row-2">
+        <div class="form-group">
+          <label>Voornaam</label>
+          <input type="text" id="su-firstname" placeholder="Voornaam" />
+        </div>
+        <div class="form-group">
+          <label>Achternaam</label>
+          <input type="text" id="su-lastname" placeholder="Achternaam" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>E-mailadres</label>
+        <input type="email" id="su-email" placeholder="jouw@email.com" />
+      </div>
+      <div class="form-group">
+        <label>Wachtwoord</label>
+        <input type="password" id="su-password" placeholder="Minimaal 6 tekens" />
+      </div>
+      <div class="form-group">
+        <label>District</label>
+        <select id="su-district">
+          <option value="">Selecteer district</option>
+          <option>Paramaribo</option><option>Wanica</option><option>Nickerie</option>
+          <option>Coronie</option><option>Saramacca</option><option>Commewijne</option>
+          <option>Marowijne</option><option>Para</option><option>Brokopondo</option>
+          <option>Sipaliwini</option>
+        </select>
+      </div>
+      <div class="form-error hidden" id="signup-error"></div>
+      <button class="btn-primary btn-full" onclick="handleSignup()">Account aanmaken</button>
+      <p class="form-footer">Al een account? <a onclick="switchAuthTab('login')">Inloggen</a></p>
+    </div>
+
+    <!-- SIGNUP PROVIDER -->
+    <div class="modal-body hidden" id="tab-provider">
+      <div class="modal-hero-text">
+        <div class="provider-signup-badge"> Word Dienstverlener</div>
+        <h2>Profiel aanmaken</h2>
+        <p>Bereik duizenden klanten in Suriname. Gratis, geen commissie.</p>
+      </div>
+      <div class="form-row-2">
+        <div class="form-group">
+          <label>Voornaam</label>
+          <input type="text" id="pv-firstname" placeholder="Voornaam" />
+        </div>
+        <div class="form-group">
+          <label>Achternaam</label>
+          <input type="text" id="pv-lastname" placeholder="Achternaam" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>E-mailadres</label>
+        <input type="email" id="pv-email" placeholder="jouw@email.com" />
+      </div>
+      <div class="form-group">
+        <label>Wachtwoord</label>
+        <input type="password" id="pv-password" placeholder="Minimaal 6 tekens" />
+      </div>
+      <div class="form-group">
+        <label>Telefoon (optioneel)</label>
+        <input type="tel" id="pv-phone" placeholder="+597 ..." />
+      </div>
+      <div class="form-row-2">
+        <div class="form-group">
+          <label>Categorie dienst</label>
+          <select id="pv-category">
+            <option value="">Selecteer categorie</option>
+            <option>Schilders</option>
+            <option>Elektriciens</option>
+            <option>Hoveniers</option>
+            <option>Bank- &amp; Mattenreiniging</option>
+            <option>Fotografie</option>
+            <option>Video &amp; Animatie</option>
+            <option>Muziek &amp; Audio</option>
+            <option>Coaching &amp; Training</option>
+            <option>Schoonheid &amp; Wellness</option>
+            <option>Evenementen</option>
+            <option>Grafisch Ontwerp</option>
+            <option>Bouw &amp; Constructie</option>
+            <option>Overig</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>District</label>
+          <select id="pv-district">
+            <option value="">Selecteer district</option>
+            <option>Paramaribo</option><option>Wanica</option><option>Nickerie</option>
+            <option>Coronie</option><option>Saramacca</option><option>Commewijne</option>
+            <option>Marowijne</option><option>Para</option><option>Brokopondo</option>
+            <option>Sipaliwini</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Werktijden</label>
+        <input type="text" id="pv-hours" placeholder="bijv. Ma–Vr 08:00–17:00, Za 09:00–13:00" />
+      </div>
+      <div class="form-group">
+        <label>Korte omschrijving van uw dienst</label>
+        <input type="text" id="pv-tagline" placeholder="bijv. Professioneel schilderwerk voor binnen en buiten" />
+      </div>
+      <div class="form-group">
+        <label>Tarief</label>
+        <input type="text" id="pv-price" placeholder="bijv. SRD 150/uur of SRD 500/project" />
+      </div>
+      <div class="form-error hidden" id="provider-error"></div>
+      <button class="btn-primary btn-full" onclick="handleProviderSignup()">Profiel aanmaken</button>
+      <p class="form-footer">Al een account? <a onclick="switchAuthTab('login')">Inloggen</a></p>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════ REVIEW MODAL ═══════════════════════════════════ -->
+<div id="review-overlay" class="overlay hidden" onclick="closeReviewModal(event)">
+  <div class="modal" id="review-modal">
+    <button class="modal-x" onclick="closeReviewModal()">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+    <div class="modal-body">
+      <div class="modal-hero-text">
+        <h2>Schrijf een beoordeling</h2>
+        <p>Deel uw ervaring met deze dienstverlener</p>
+      </div>
+      <div class="form-group">
+        <label>Gebruikersscore (1–100%)</label>
+        <div id="star-selector"></div>
+        <input type="hidden" id="review-rating" value="0" />
+      </div>
+      <div class="form-group">
+        <label>Uw recensie</label>
+        <textarea id="review-text" rows="4" placeholder="Beschrijf uw ervaring met deze dienstverlener…"></textarea>
+      </div>
+      <input type="hidden" id="review-target-id" />
+      <div class="form-error hidden" id="review-error"></div>
+      <button class="btn-primary btn-full" onclick="submitReview()">Beoordeling plaatsen</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════ TOAST ═══════════════════════════════════ -->
+<div id="toast" class="toast hidden"></div>
+
+<script src="script.js"></script>
+</body>
+</html>
