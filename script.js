@@ -44,7 +44,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('review-overlay').classList.add('hidden');
   });
   document.getElementById('star-selector')?.addEventListener('input', e => updateSlider(e.target.value));
-  document.querySelector('#review-modal .btn-primary')?.addEventListener('click', submitReview);
 
   // Close dropdown when clicking outside the user-pill area
   document.addEventListener('click', e => {
@@ -76,7 +75,7 @@ function openAuthModal(tab) {
 window.openAuthModal = openAuthModal;
 
 function closeAuthModal(e) {
-  if (e.target === document.getElementById('auth-overlay')) {
+  if (!e || e.target === document.getElementById('auth-overlay')) {
     document.getElementById('auth-overlay').classList.add('hidden');
   }
 }
@@ -93,6 +92,9 @@ async function handleLogin() {
   const password = document.getElementById('login-password').value;
   const errEl    = document.getElementById('login-error');
   errEl.textContent = '';
+
+  if (!email)    { errEl.textContent = 'Voer uw e-mailadres in.'; return; }
+  if (!password) { errEl.textContent = 'Voer uw wachtwoord in.'; return; }
 
   try {
     const r    = await fetch(API + '/login', { method: 'POST', headers: ct(), body: JSON.stringify({ email, password }) });
@@ -117,7 +119,12 @@ async function handleSignup() {
   const errEl     = document.getElementById('signup-error');
   errEl.textContent = '';
 
-  if (!firstName || !email || !password || !buurt) { errEl.textContent = 'Vul alle velden in.'; return; }
+  if (!firstName)              { errEl.textContent = 'Voornaam is verplicht.'; return; }
+  if (!email)                  { errEl.textContent = 'E-mailadres is verplicht.'; return; }
+  if (!/\S+@\S+\.\S+/.test(email)) { errEl.textContent = 'Voer een geldig e-mailadres in.'; return; }
+  if (!password)               { errEl.textContent = 'Wachtwoord is verplicht.'; return; }
+  if (password.length < 6)     { errEl.textContent = 'Wachtwoord moet minimaal 6 tekens zijn.'; return; }
+  if (!buurt)                  { errEl.textContent = 'Selecteer een district.'; return; }
 
   const name = lastName ? firstName + ' ' + lastName : firstName;
   try {
@@ -138,22 +145,30 @@ async function handleSignup() {
 }
 
 async function handleProviderSignup() {
-  const firstName  = document.getElementById('pv-firstname').value.trim();
-  const lastName   = document.getElementById('pv-lastname').value.trim();
-  const email      = document.getElementById('pv-email').value.trim();
-  const password   = document.getElementById('pv-password').value;
-  const buurt      = document.getElementById('pv-district').value;
-  const category   = document.getElementById('pv-category').value;
-  const bio        = document.getElementById('pv-tagline')?.value.trim() || '';
-  const hourly_rate = document.getElementById('pv-price')?.value || null;
-  const errEl      = document.getElementById('provider-error');
-  errEl.textContent = '';
+  const firstName    = document.getElementById('pv-firstname').value.trim();
+  const lastName     = document.getElementById('pv-lastname').value.trim();
+  const email        = document.getElementById('pv-email').value.trim();
+  const password     = document.getElementById('pv-password').value;
+  const buurt        = document.getElementById('pv-district').value;
+  const category     = document.getElementById('pv-category').value;
+  const bio          = document.getElementById('pv-tagline')?.value.trim() || '';
+  const hourly_rate  = document.getElementById('pv-price')?.value || null;
+  const phone        = document.getElementById('pv-phone')?.value.trim() || null;
+  const working_hours = document.getElementById('pv-hours')?.value.trim() || null;
+  const errEl        = document.getElementById('provider-error');
+  errEl.textContent  = '';
 
-  if (!firstName || !email || !password || !buurt || !category) { errEl.textContent = 'Vul alle verplichte velden in.'; return; }
+  if (!firstName)              { errEl.textContent = 'Voornaam is verplicht.'; return; }
+  if (!email)                  { errEl.textContent = 'E-mailadres is verplicht.'; return; }
+  if (!/\S+@\S+\.\S+/.test(email)) { errEl.textContent = 'Voer een geldig e-mailadres in.'; return; }
+  if (!password)               { errEl.textContent = 'Wachtwoord is verplicht.'; return; }
+  if (password.length < 6)     { errEl.textContent = 'Wachtwoord moet minimaal 6 tekens zijn.'; return; }
+  if (!buurt)                  { errEl.textContent = 'Selecteer een district.'; return; }
+  if (!category)               { errEl.textContent = 'Selecteer een categorie.'; return; }
 
   const name = lastName ? firstName + ' ' + lastName : firstName;
   try {
-    const r    = await fetch(API + '/signup', { method: 'POST', headers: ct(), body: JSON.stringify({ name, email, password, role: 'dienstverlener', buurt, category, bio, hourly_rate }) });
+    const r    = await fetch(API + '/signup', { method: 'POST', headers: ct(), body: JSON.stringify({ name, email, password, role: 'dienstverlener', buurt, category, bio, hourly_rate, phone, working_hours }) });
     const data = await r.json();
     if (!r.ok) { errEl.textContent = data.error; return; }
     if (data.user) {
@@ -233,7 +248,6 @@ function showView(name) {
   if (name === 'browse')    loadWorkers();
   if (name === 'favorites') renderFavoritesView();
   if (name === 'dashboard') renderDashboard();
-  // 'home' and 'profile' don't need re-fetching on every view switch
 
   setTimeout(setupReveal, 50);
 }
@@ -260,6 +274,13 @@ async function loadHomeData() {
     setTimeout(setupReveal, 80);
   } catch (e) { console.error('Home data:', e); }
 }
+
+const CAT_ICONS = {
+  'Schilders': '🖌️', 'Elektriciens': '⚡', 'Hoveniers': '🌿',
+  'Bank- & Mattenreiniging': '🛋️', 'Fotografie': '📷', 'Video & Animatie': '🎬',
+  'Muziek & Audio': '🎵', 'Coaching & Training': '🎯', 'Schoonheid & Wellness': '💆',
+  'Evenementen': '🎉', 'Grafisch Ontwerp': '🎨', 'Bouw & Constructie': '🏗️', 'Overig': '🔧',
+};
 
 // Maps category name → CSS class suffix used in style.css
 const CAT_CSS = {
@@ -297,7 +318,9 @@ function renderCategoryGrid(cats) {
   grid.innerHTML = allCats.map(c => {
     const cls   = CAT_CSS[c.name] || '';
     const count = c.provider_count;
+    const icon = CAT_ICONS[c.name] || '🔧';
     return '<div class="cat-card card-' + cls + ' reveal" onclick="browseByCategory(\'' + esc(c.name) + '\')" tabindex="0">' +
+      '<div class="cat-icon">' + icon + '</div>' +
       '<div class="cat-name">' + esc(c.name) + '</div>' +
       '<div class="cat-count">' + count + ' dienstverlener' + (count !== 1 ? 's' : '') + '</div>' +
     '</div>';
@@ -332,6 +355,8 @@ function applyFilters() {
   if (sort === 'price-asc')  filtered.sort((a, b) => (a.hourly_rate || 0) - (b.hourly_rate || 0));
   if (sort === 'price-desc') filtered.sort((a, b) => (b.hourly_rate || 0) - (a.hourly_rate || 0));
   if (sort === 'name')       filtered.sort((a, b) => a.name.localeCompare(b.name));
+  if (sort === 'score')      filtered.sort((a, b) => (b.avg_score || 0) - (a.avg_score || 0));
+  if (sort === 'reviews')    filtered.sort((a, b) => (b.review_count || 0) - (a.review_count || 0));
 
   const grid  = document.getElementById('browse-grid');
   const empty = document.getElementById('browse-empty');
@@ -365,6 +390,19 @@ function setSidebarCat(cat, el) {
   applyFilters();
 }
 window.setSidebarCat = setSidebarCat;
+
+function resetFilters() {
+  const search = document.getElementById('browse-search');
+  const district = document.getElementById('filter-district');
+  const sort = document.getElementById('filter-sort');
+  if (search) search.value = '';
+  if (district) district.value = '';
+  if (sort) sort.value = '';
+  activeCat = null;
+  document.querySelectorAll('.sidebar-cat-item').forEach(i => i.classList.remove('active'));
+  applyFilters();
+}
+window.resetFilters = resetFilters;
 
 function browseByCategory(cat) {
   activeCat = cat;
@@ -412,8 +450,9 @@ window.heroSearch = heroSearch;
 function providerCard(w, rank) {
   const favs  = getFavs();
   const isFav = favs.includes(w.id);
-  const price = w.hourly_rate ? 'SRD ' + w.hourly_rate + '/u' : '';
+  const price     = w.hourly_rate ? 'SRD ' + w.hourly_rate + '/u' : '';
   const rankBadge = rank && rank <= 3 ? '<span class="rank-badge">#' + rank + '</span>' : '';
+  const score     = w.avg_score ? '<span class="meta-score">&#9733; ' + w.avg_score + '</span>' : '';
 
   return '<div class="provider-card reveal" onclick="showProviderProfile(' + w.id + ')" tabindex="0">' +
     '<div class="provider-card-top">' +
@@ -426,12 +465,13 @@ function providerCard(w, rank) {
     '<div class="provider-meta">' +
     (w.category ? '<span class="meta-chip">' + esc(w.category) + '</span>' : '') +
     (w.buurt    ? '<span class="meta-chip">' + esc(w.buurt)    + '</span>' : '') +
+    score +
     '</div>' +
     (price ? '<div class="provider-price">' + price + '</div>' : '') +
     '<div class="provider-card-actions">' +
     '<button class="btn-view-profile" onclick="event.stopPropagation();showProviderProfile(' + w.id + ')">Bekijk profiel</button>' +
     '<button class="btn-fav' + (isFav ? ' active' : '') + '" onclick="event.stopPropagation();toggleFav(' + w.id + ',this)" title="Favoriet">' +
-    (isFav ? 'heart' : 'heart-o') + // text-only fallback; CSS can swap
+    (isFav ? '&#10084;' : '&#9825;') +
     '</button>' +
     '</div>' +
     '</div>' +
@@ -446,13 +486,20 @@ function getFavs() { return JSON.parse(localStorage.getItem('mkd_fav') || '[]');
 
 function toggleFav(id, btn) {
   let favs = getFavs();
+  const isProfile = btn && btn.classList.contains('btn-fav-profile');
   if (favs.includes(id)) {
     favs = favs.filter(f => f !== id);
-    if (btn) btn.classList.remove('active');
+    if (btn) {
+      btn.classList.remove('active');
+      btn.innerHTML = isProfile ? '&#9825; Opslaan' : '&#9825;';
+    }
     showToast('Verwijderd uit favorieten.', 'info');
   } else {
     favs.push(id);
-    if (btn) { btn.classList.add('active'); btn.classList.add('heart-beat'); }
+    if (btn) {
+      btn.classList.add('active');
+      btn.innerHTML = isProfile ? '&#10084; Favoriet' : '&#10084;';
+    }
     showToast('Toegevoegd aan favorieten!', 'success');
   }
   localStorage.setItem('mkd_fav', JSON.stringify(favs));
@@ -514,7 +561,7 @@ function _renderProfile(w) {
   el.innerHTML =
     '<div class="profile-header-bg">' +
       '<div class="profile-header-inner">' +
-        '<button class="profile-back" onclick="history.back()">&#8592; Terug</button>' +
+        '<button class="profile-back" onclick="showView(\'browse\')">&#8592; Terug</button>' +
         '<div class="profile-top">' +
           '<div class="profile-avatar-lg">' + ini(w.name) + '</div>' +
           '<div class="profile-header-info">' +
@@ -544,9 +591,38 @@ function _renderProfile(w) {
             '<button class="btn-contact" onclick="openReviewModal(' + w.id + ')">Review schrijven</button>' +
           '</div>'
         : '') +
+      '<div class="profile-section" id="reviews-section">' +
+        '<div class="profile-section-title">Beoordelingen</div>' +
+        '<div id="reviews-list"><p>Beoordelingen laden...</p></div>' +
+      '</div>' +
     '</div>';
 
   showView('profile');
+  _loadReviews(w.id);
+}
+
+async function _loadReviews(providerId) {
+  const container = document.getElementById('reviews-list');
+  if (!container) return;
+  try {
+    const r = await fetch(API + '/reviews/' + providerId);
+    const reviews = await r.json();
+    if (!reviews.length) {
+      container.innerHTML = '<p>Nog geen beoordelingen.</p>';
+      return;
+    }
+    container.innerHTML = reviews.map(rv =>
+      '<div class="review-item">' +
+        '<div class="review-header">' +
+          '<strong>' + esc(rv.reviewer_name || 'Anoniem') + '</strong>' +
+          '<span class="review-score">' + rv.score + '/10</span>' +
+        '</div>' +
+        '<p>' + esc(rv.text) + '</p>' +
+      '</div>'
+    ).join('');
+  } catch {
+    container.innerHTML = '<p>Kon beoordelingen niet laden.</p>';
+  }
 }
 
 // ─────────────────────────────────────────
@@ -597,6 +673,7 @@ async function submitBooking() {
   const errEl            = document.getElementById('bk-error');
 
   if (!date) { errEl.textContent = 'Kies een datum.'; return; }
+  if (new Date(date) < new Date(new Date().toDateString())) { errEl.textContent = 'Kies een datum in de toekomst.'; return; }
 
   try {
     const r = await fetch(API + '/bookings', {
@@ -632,14 +709,19 @@ function closeReviewModal(e) {
 
 function updateSlider(val) {
   const slider  = document.getElementById('star-selector');
-  const display = document.getElementById('review-rating');
-  if (slider)  slider.value    = val;
+  const hidden  = document.getElementById('review-rating');
+  const display = document.getElementById('review-rating-display');
+  if (slider)  slider.value       = val;
+  if (hidden)  hidden.value       = val;
   if (display) display.textContent = val + '/10';
 }
 
 async function submitReview() {
+  if (submitReview._running) return;
+  submitReview._running = true;
+  setTimeout(() => { submitReview._running = false; }, 2000);
   const targetId = document.getElementById('review-target-id').value;
-  const score    = document.getElementById('star-selector').value;
+  const score    = document.getElementById('review-rating').value;
   const text     = document.getElementById('review-text').value.trim();
   const errEl    = document.getElementById('review-error');
 
@@ -655,7 +737,9 @@ async function submitReview() {
     document.getElementById('review-overlay').classList.add('hidden');
     showToast('Review geplaatst!', 'success');
   } catch { errEl.textContent = 'Verbindingsfout.'; }
+  submitReview._running = false;
 }
+window.submitReview = submitReview;
 
 // ─────────────────────────────────────────
 // NOTIFICATIONS POLL
@@ -668,7 +752,9 @@ async function pollNotifications() {
     const notifs = await r.json();
     const unread = notifs.filter(n => !n.is_read).length;
     const badge  = document.getElementById('notif-badge');
-    if (badge) { badge.textContent = unread; badge.classList.toggle('hidden', unread === 0); }
+    const badge2 = document.getElementById('dropdown-notif-badge');
+    if (badge)  { badge.textContent  = unread; badge.classList.toggle('hidden',  unread === 0); }
+    if (badge2) { badge2.textContent = unread; badge2.classList.toggle('hidden', unread === 0); }
   } catch { /* silent */ }
 }
 
@@ -773,6 +859,8 @@ function _dvProfiel() {
     '<div class="form-group"><label>Ervaring</label><input type="text" id="dv-exp" value="' + esc(currentUser.experience || '') + '"></div>' +
     '<div class="form-group"><label>Bio</label><textarea id="dv-bio" rows="4">' + esc(currentUser.bio || '') + '</textarea></div>' +
     '<div class="form-group"><label>Uurtarief (SRD)</label><input type="number" id="dv-rate" value="' + (currentUser.hourly_rate || '') + '"></div>' +
+    '<div class="form-group"><label>Telefoon</label><input type="tel" id="dv-phone" value="' + esc(currentUser.phone || '') + '" placeholder="+597 ..."></div>' +
+    '<div class="form-group"><label>Werktijden</label><input type="text" id="dv-hours" value="' + esc(currentUser.working_hours || '') + '" placeholder="bijv. Ma–Vr 08:00–17:00"></div>' +
     '<div class="form-group"><label>Buurt</label><select id="dv-buurt">' + distOpts(currentUser.buurt) + '</select></div>' +
     '<button class="btn-primary" onclick="saveProfile()">Opslaan</button>' +
     '<div class="form-error" id="dv-prof-msg"></div>' +
@@ -907,6 +995,7 @@ async function respondBooking(bookingId, status, klantId) {
     if (!r.ok) throw new Error();
     showToast(status === 'accepted' ? 'Boeking geaccepteerd!' : 'Boeking geweigerd.', 'info');
     loadBookingsDV();
+    pollNotifications();
   } catch { showToast('Fout bij bijwerken.', 'error'); }
 }
 window.respondBooking = respondBooking;
@@ -952,6 +1041,7 @@ async function _renderNotifList(el) {
     const r      = await fetch(API + '/notifications/' + currentUser.id);
     const notifs = await r.json();
     await fetch(API + '/notifications/' + currentUser.id + '/read', { method: 'PUT' });
+    pollNotifications();
 
     if (!notifs.length) { el.innerHTML = '<p class="empty-plain">Geen notificaties.</p>'; return; }
 
@@ -1014,23 +1104,25 @@ async function renderCalendar() {
 // ─────────────────────────────────────────
 
 async function saveProfile() {
-  const name        = document.getElementById('dv-name').value.trim();
-  const category    = document.getElementById('dv-cat').value.trim();
-  const experience  = document.getElementById('dv-exp').value.trim();
-  const bio         = document.getElementById('dv-bio').value.trim();
-  const hourly_rate = document.getElementById('dv-rate').value;
-  const buurt       = document.getElementById('dv-buurt').value;
-  const msgEl       = document.getElementById('dv-prof-msg');
+  const name          = document.getElementById('dv-name').value.trim();
+  const category      = document.getElementById('dv-cat').value.trim();
+  const experience    = document.getElementById('dv-exp').value.trim();
+  const bio           = document.getElementById('dv-bio').value.trim();
+  const hourly_rate   = document.getElementById('dv-rate').value;
+  const buurt         = document.getElementById('dv-buurt').value;
+  const phone         = document.getElementById('dv-phone').value.trim();
+  const working_hours = document.getElementById('dv-hours').value.trim();
+  const msgEl         = document.getElementById('dv-prof-msg');
 
   try {
     const r = await fetch(API + '/profile/' + currentUser.id, {
       method: 'PUT', headers: ct(),
-      body: JSON.stringify({ name, category, experience, bio, hourly_rate: hourly_rate || null, buurt }),
+      body: JSON.stringify({ name, category, experience, bio, hourly_rate: hourly_rate || null, buurt, phone: phone || null, working_hours: working_hours || null }),
     });
     const data = await r.json();
     if (!r.ok) { msgEl.textContent = data.error; return; }
 
-    Object.assign(currentUser, { name, category, experience, bio, hourly_rate, buurt });
+    Object.assign(currentUser, { name, category, experience, bio, hourly_rate, buurt, phone, working_hours });
     localStorage.setItem('mkd_user', JSON.stringify(currentUser));
     msgEl.style.color = 'green';
     msgEl.textContent = 'Profiel opgeslagen!';
@@ -1167,6 +1259,9 @@ function injectDashCSS() {
     '.notif-item small{color:#aaa;font-size:.8rem}',
     '.empty-plain{color:#aaa;font-style:italic}',
     '@media(max-width:768px){.dashboard-grid{grid-template-columns:1fr}}',
+    '.meta-score{background:#fff8e1;color:#b7791f;border-radius:20px;padding:2px 8px;font-size:.8rem;font-weight:600}',
+    '.cat-icon{font-size:2rem;margin-bottom:8px}',
+    '.btn-fav{font-size:1.1rem;background:none;border:none;cursor:pointer;padding:4px 8px;color:#e53e3e}',
   ].join('');
   document.head.appendChild(s);
 }

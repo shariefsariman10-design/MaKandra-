@@ -31,11 +31,12 @@
       <div class="user-pill" onclick="toggleUserMenu()">
         <div class="user-avatar-sm" id="nav-avatar">?</div>
         <span id="nav-username">Gebruiker</span>
+        <span id="notif-badge" class="hidden" style="background:#e53e3e;color:#fff;border-radius:50%;padding:1px 6px;font-size:11px;margin-left:4px;"></span>
         <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d="M2 4l4 4 4-4"/></svg>
       </div>
       <div class="user-dropdown hidden" id="user-dropdown">
         <a onclick="showView('dashboard'); toggleUserMenu()">
-          <span>👤</span> Mijn Dashboard
+          <span>👤</span> Mijn Dashboard <span id="dropdown-notif-badge" class="hidden" style="background:#e53e3e;color:#fff;border-radius:50%;padding:1px 6px;font-size:11px;margin-left:4px;"></span>
         </a>
         <a onclick="showFavorites(); toggleUserMenu()">
           <span>❤️</span> Favorieten
@@ -585,9 +586,9 @@
         <p>Deel uw ervaring met deze dienstverlener</p>
       </div>
       <div class="form-group">
-        <label>Gebruikersscore (1–100%)</label>
-        <div id="star-selector"></div>
-        <input type="hidden" id="review-rating" value="0" />
+        <label>Score: <span id="review-rating-display">5/10</span></label>
+        <input type="range" id="star-selector" min="1" max="10" value="5" style="width:100%" />
+        <input type="hidden" id="review-rating" value="5" />
       </div>
       <div class="form-group">
         <label>Uw recensie</label>

@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import bcrypt from 'bcryptjs';
 import { db } from './config/db.js';
 
 const app = express();
@@ -13,20 +14,22 @@ app.use(express.json());
 // SIGNUP
 app.post('/signup', async (req, res) => {
   try {
-    const { name, email, password, role, buurt, category, experience, bio, hourly_rate } = req.body;
+    const { name, email, password, role, buurt, category, experience, bio, hourly_rate, phone, working_hours } = req.body;
     if (!name || !email || !password || !role || !buurt) {
       return res.status(400).json({ error: 'Vul alle velden in.' });
     }
+    const hashed = await bcrypt.hash(password, 10);
     const [result] = await db.query(
-      'INSERT INTO users (name, email, password, role, buurt, category, experience, bio, hourly_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [name, email, password, role, buurt, category || null, experience || null, bio || null, hourly_rate || null]
+      'INSERT INTO users (name, email, password, role, buurt, category, experience, bio, hourly_rate, phone, working_hours) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [name, email, hashed, role, buurt, category || null, experience || null, bio || null, hourly_rate || null, phone || null, working_hours || null]
     );
-    const [rows] = await db.query('SELECT id, name, email, role, buurt, category, experience, bio, hourly_rate FROM users WHERE id = ?', [result.insertId]);
+    const [rows] = await db.query('SELECT id, name, email, role, buurt, category, experience, bio, hourly_rate, phone, working_hours FROM users WHERE id = ?', [result.insertId]);
     res.status(201).json({ message: 'Account aangemaakt!', user: rows[0] });
   } catch (err) {
     if (err.code === 'ER_DUP_ENTRY') {
       res.status(400).json({ error: 'Dit e-mailadres is al in gebruik.' });
     } else {
+      console.error('SIGNUP ERROR:', err.message);
       res.status(500).json({ error: err.message });
     }
   }
@@ -36,11 +39,12 @@ app.post('/signup', async (req, res) => {
 app.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const [rows] = await db.query(
-      'SELECT * FROM users WHERE email = ? AND password = ?',
-      [email, password]
-    );
+    const [rows] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
     if (rows.length === 0) {
+      return res.status(401).json({ error: 'Verkeerd e-mailadres of wachtwoord.' });
+    }
+    const valid = await bcrypt.compare(password, rows[0].password);
+    if (!valid) {
       return res.status(401).json({ error: 'Verkeerd e-mailadres of wachtwoord.' });
     }
     const user = rows[0];
@@ -102,13 +106,19 @@ app.get('/categories', async (req, res) => {
 app.get('/dienstverleners', async (req, res) => {
   try {
     const { buurt } = req.query;
-    let query =
-      'SELECT id, name, category, experience, bio, hourly_rate, buurt FROM users WHERE role = ?';
+    let query = `
+      SELECT u.id, u.name, u.category, u.experience, u.bio, u.hourly_rate, u.buurt,
+             ROUND(AVG(r.score), 1) AS avg_score,
+             COUNT(r.id) AS review_count
+      FROM users u
+      LEFT JOIN reviews r ON r.provider_id = u.id
+      WHERE u.role = ?`;
     const params = ['dienstverlener'];
     if (buurt) {
-      query += ' AND buurt = ?';
+      query += ' AND u.buurt = ?';
       params.push(buurt);
     }
+    query += ' GROUP BY u.id';
     const [rows] = await db.query(query, params);
     res.json(rows);
   } catch (err) {
@@ -119,10 +129,10 @@ app.get('/dienstverleners', async (req, res) => {
 // UPDATE dienstverlener profile (name, category, experience, bio, hourly_rate, buurt)
 app.put('/profile/:id', async (req, res) => {
   try {
-    const { name, category, experience, bio, hourly_rate, buurt } = req.body;
+    const { name, category, experience, bio, hourly_rate, buurt, phone, working_hours } = req.body;
     await db.query(
-      'UPDATE users SET name=?, category=?, experience=?, bio=?, hourly_rate=?, buurt=? WHERE id=?',
-      [name, category, experience, bio, hourly_rate, buurt, req.params.id]
+      'UPDATE users SET name=?, category=?, experience=?, bio=?, hourly_rate=?, buurt=?, phone=?, working_hours=? WHERE id=?',
+      [name, category, experience, bio, hourly_rate, buurt, phone || null, working_hours || null, req.params.id]
     );
     res.json({ message: 'Profiel bijgewerkt!' });
   } catch (err) {
