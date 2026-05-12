@@ -77,6 +77,7 @@ app.post('/login', async (req, res) => {
         phone: user.phone,
         working_hours: user.working_hours,
         profile_picture: user.profile_picture,
+        is_available: user.is_available,
       },
     });
   } catch (err) {
@@ -100,15 +101,26 @@ app.get('/users', async (req, res) => {
   }
 });
 
+// GET platform stats
+app.get('/stats', async (req, res) => {
+  try {
+    const [[{ dv_count }]]       = await db.query("SELECT COUNT(*) AS dv_count FROM users WHERE role = 'dienstverlener'");
+    const [[{ voltooid_count }]] = await db.query("SELECT COUNT(*) AS voltooid_count FROM bookings WHERE status = 'accepted'");
+    res.json({ dv_count, voltooid_count });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // GET categories with provider count + booking count, sorted by bookings
 app.get('/categories', async (req, res) => {
   try {
     const [rows] = await db.query(
       `SELECT u.category,
               COUNT(DISTINCT u.id)  AS provider_count,
-              COUNT(b.id)           AS booking_count
+              COUNT(DISTINCT b.id)  AS booking_count,
+              COUNT(DISTINCT j.id)  AS job_count
        FROM users u
        LEFT JOIN bookings b ON b.dienstverlener_id = u.id
+       LEFT JOIN jobs j ON j.category = u.category AND j.status = 'open'
        WHERE u.role = 'dienstverlener' AND u.category IS NOT NULL AND u.category != ''
        GROUP BY u.category
        ORDER BY booking_count DESC`
@@ -124,7 +136,8 @@ app.get('/dienstverleners', async (req, res) => {
   try {
     const { buurt } = req.query;
     let query = `
-      SELECT u.id, u.name, u.category, u.experience, u.bio, u.hourly_rate, u.buurt, u.profile_picture,
+      SELECT u.id, u.name, u.email, u.category, u.experience, u.bio, u.hourly_rate, u.buurt,
+             u.profile_picture, u.phone, u.working_hours, u.is_available,
              ROUND(AVG(r.score), 1) AS avg_score,
              COUNT(r.id) AS review_count
       FROM users u
@@ -152,6 +165,18 @@ app.put('/profile/:id', async (req, res) => {
       [name, category, experience, bio, hourly_rate, buurt, phone || null, working_hours || null, req.params.id]
     );
     res.json({ message: 'Profiel bijgewerkt!' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// UPDATE name only (for klanten)
+app.put('/update-name/:id', async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ error: 'Naam is verplicht.' });
+    await db.query('UPDATE users SET name=? WHERE id=?', [name.trim(), req.params.id]);
+    res.json({ message: 'Naam bijgewerkt!' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -280,27 +305,46 @@ app.get('/my-bookings/:id', async (req, res) => {
   }
 });
 
-// UPDATE booking status (accept / decline)
+// UPDATE booking status (accept / decline / cancel)
 app.put('/bookings/:id', async (req, res) => {
   try {
-    const { status, klant_id, dienstverlener_name } = req.body;
+    const { status, klant_id, dienstverlener_id, dienstverlener_name, klant_name } = req.body;
 
-    if (!['accepted', 'declined'].includes(status)) {
+    if (!['accepted', 'declined', 'cancelled'].includes(status)) {
       return res.status(400).json({ error: 'Ongeldige status.' });
     }
 
     await db.query('UPDATE bookings SET status = ? WHERE id = ?', [status, req.params.id]);
 
-    const emoji = status === 'accepted' ? '✅' : '❌';
-    const word = status === 'accepted' ? 'geaccepteerd' : 'afgewezen';
+    if (status === 'accepted' || status === 'declined') {
+      const emoji = status === 'accepted' ? '✅' : '❌';
+      const word  = status === 'accepted' ? 'geaccepteerd' : 'afgewezen';
+      await db.query('INSERT INTO notifications (user_id, message) VALUES (?, ?)',
+        [klant_id, `${emoji} ${dienstverlener_name} heeft jouw boeking ${word}.`]);
+    }
 
-    // Notify klant
-    await db.query(
-      'INSERT INTO notifications (user_id, message) VALUES (?, ?)',
-      [klant_id, `${emoji} ${dienstverlener_name} heeft jouw boeking ${word}.`]
-    );
+    if (status === 'cancelled' && dienstverlener_id) {
+      await db.query('INSERT INTO notifications (user_id, message) VALUES (?, ?)',
+        [dienstverlener_id, `❌ ${klant_name || 'Klant'} heeft de boeking geannuleerd.`]);
+    }
 
     res.json({ message: 'Status bijgewerkt!' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET reviews written by a klant
+app.get('/my-reviews/:id', async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT r.*, u.name AS provider_name FROM reviews r
+       JOIN users u ON r.provider_id = u.id
+       WHERE r.reviewer_id = ?
+       ORDER BY r.created_at DESC`,
+      [req.params.id]
+    );
+    res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -328,6 +372,17 @@ app.put('/notifications/:id/read', async (req, res) => {
   try {
     await db.query('UPDATE notifications SET is_read = 1 WHERE user_id = ?', [req.params.id]);
     res.json({ message: 'Gelezen' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// UPDATE availability status
+app.put('/availability/:id', async (req, res) => {
+  try {
+    const { is_available } = req.body;
+    await db.query('UPDATE users SET is_available = ? WHERE id = ?', [is_available ? 1 : 0, req.params.id]);
+    res.json({ message: 'Status bijgewerkt!' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -370,6 +425,32 @@ app.get('/reviews/:id', async (req, res) => {
   }
 });
 
+// GET provider stats (total clients, returning clients)
+app.get('/provider-stats/:id', async (req, res) => {
+  try {
+    const [[stats]] = await db.query(
+      `SELECT COUNT(DISTINCT klant_id) AS total_clients
+       FROM bookings WHERE dienstverlener_id = ? AND status = 'accepted'`,
+      [req.params.id]
+    );
+    const [[ret]] = await db.query(
+      `SELECT COUNT(*) AS returning_clients
+       FROM (
+         SELECT klant_id FROM bookings
+         WHERE dienstverlener_id = ? AND status = 'accepted'
+         GROUP BY klant_id HAVING COUNT(*) > 1
+       ) sub`,
+      [req.params.id]
+    );
+    res.json({
+      total_clients:     stats.total_clients     || 0,
+      returning_clients: ret.returning_clients   || 0,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────
@@ -396,5 +477,222 @@ app.post('/upload/avatar/:id', upload.single('avatar'), async (req, res) => {
 
 // START
 // ─────────────────────────────────────────
+
+// ─────────────────────────────────────────
+// CHAT / MESSAGES
+// ─────────────────────────────────────────
+
+// GET all conversations for a user
+app.get('/conversations/:userId', async (req, res) => {
+  try {
+    const uid = req.params.userId;
+    const [rows] = await db.query(`
+      SELECT
+        u.id, u.name, u.profile_picture, u.role,
+        (SELECT message FROM messages
+         WHERE (sender_id = ? AND receiver_id = u.id) OR (sender_id = u.id AND receiver_id = ?)
+         ORDER BY created_at DESC LIMIT 1) AS last_message,
+        (SELECT created_at FROM messages
+         WHERE (sender_id = ? AND receiver_id = u.id) OR (sender_id = u.id AND receiver_id = ?)
+         ORDER BY created_at DESC LIMIT 1) AS last_time,
+        (SELECT COUNT(*) FROM messages
+         WHERE sender_id = u.id AND receiver_id = ? AND is_read = 0) AS unread_count
+      FROM users u
+      WHERE u.id IN (
+        SELECT DISTINCT IF(sender_id = ?, receiver_id, sender_id)
+        FROM messages WHERE sender_id = ? OR receiver_id = ?
+      )
+      ORDER BY last_time DESC
+    `, [uid, uid, uid, uid, uid, uid, uid, uid]);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET unread message count (must be before /:userId1/:userId2 to avoid route conflict)
+app.get('/messages/unread/:userId', async (req, res) => {
+  try {
+    const [[{ count }]] = await db.query(
+      'SELECT COUNT(*) AS count FROM messages WHERE receiver_id = ? AND is_read = 0',
+      [req.params.userId]
+    );
+    res.json({ count });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET messages between two users (after /unread to avoid route conflict)
+app.get('/messages/:userId1/:userId2', async (req, res) => {
+  try {
+    const { userId1, userId2 } = req.params;
+    const [rows] = await db.query(`
+      SELECT m.*, u.name AS sender_name FROM messages m
+      JOIN users u ON m.sender_id = u.id
+      WHERE (m.sender_id = ? AND m.receiver_id = ?)
+         OR (m.sender_id = ? AND m.receiver_id = ?)
+      ORDER BY m.created_at ASC
+    `, [userId1, userId2, userId2, userId1]);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST send a message
+app.post('/messages', async (req, res) => {
+  try {
+    const { sender_id, receiver_id, message } = req.body;
+    if (!sender_id || !receiver_id || !message) {
+      return res.status(400).json({ error: 'Alle velden zijn verplicht.' });
+    }
+    const [[receiver]] = await db.query('SELECT dnd_mode FROM users WHERE id = ?', [receiver_id]);
+    if (receiver?.dnd_mode) return res.json({ dnd: true });
+    await db.query(
+      'INSERT INTO messages (sender_id, receiver_id, message) VALUES (?, ?, ?)',
+      [sender_id, receiver_id, message]
+    );
+    res.status(201).json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// PUT mark conversation as read
+app.put('/messages/read', async (req, res) => {
+  try {
+    const { reader_id, sender_id } = req.body;
+    await db.query(
+      'UPDATE messages SET is_read = 1 WHERE sender_id = ? AND receiver_id = ?',
+      [sender_id, reader_id]
+    );
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// PUT DND mode
+app.put('/dnd/:id', async (req, res) => {
+  try {
+    const { dnd_mode } = req.body;
+    await db.query('UPDATE users SET dnd_mode = ? WHERE id = ?', [dnd_mode ? 1 : 0, req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─────────────────────────────────────────
+// JOBS
+// ─────────────────────────────────────────
+
+// POST a new job
+app.post('/jobs', async (req, res) => {
+  try {
+    const { klant_id, title, description, category, buurt, budget, date_needed } = req.body;
+    if (!klant_id || !title || !category) return res.status(400).json({ error: 'Vul alle verplichte velden in.' });
+    const [result] = await db.query(
+      'INSERT INTO jobs (klant_id, title, description, category, buurt, budget, date_needed) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [klant_id, title, description || null, category, buurt || null, budget || null, date_needed || null]
+    );
+    res.status(201).json({ id: result.insertId });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET all open jobs (optional ?category= filter)
+app.get('/jobs', async (req, res) => {
+  try {
+    const { category } = req.query;
+    const where = category ? 'WHERE j.status = "open" AND j.category = ?' : 'WHERE j.status = "open"';
+    const params = category ? [category] : [];
+    const [rows] = await db.query(
+      `SELECT j.*, u.name AS klant_name,
+        (SELECT COUNT(*) FROM job_responses jr WHERE jr.job_id = j.id) AS response_count
+       FROM jobs j JOIN users u ON j.klant_id = u.id
+       ${where} ORDER BY j.created_at DESC`,
+      params
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET jobs posted by a klant
+app.get('/jobs/mine/:klantId', async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT j.*,
+        (SELECT COUNT(*) FROM job_responses jr WHERE jr.job_id = j.id) AS response_count
+       FROM jobs j WHERE j.klant_id = ? ORDER BY j.created_at DESC`,
+      [req.params.klantId]
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// PUT close a job
+app.put('/jobs/:id/close', async (req, res) => {
+  try {
+    await db.query('UPDATE jobs SET status = "closed" WHERE id = ?', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST respond to a job
+app.post('/job-responses', async (req, res) => {
+  try {
+    const { job_id, dienstverlener_id, message } = req.body;
+    if (!job_id || !dienstverlener_id) return res.status(400).json({ error: 'Ongeldige aanvraag.' });
+    // Prevent duplicate responses
+    const [existing] = await db.query('SELECT id FROM job_responses WHERE job_id = ? AND dienstverlener_id = ?', [job_id, dienstverlener_id]);
+    if (existing.length) return res.status(409).json({ error: 'Je hebt al gereageerd op deze opdracht.' });
+    await db.query('INSERT INTO job_responses (job_id, dienstverlener_id, message) VALUES (?, ?, ?)', [job_id, dienstverlener_id, message || null]);
+    // Notify the klant
+    const [[job]] = await db.query('SELECT klant_id, title FROM jobs WHERE id = ?', [job_id]);
+    const [[dv]]  = await db.query('SELECT name FROM users WHERE id = ?', [dienstverlener_id]);
+    if (job) await db.query('INSERT INTO notifications (user_id, message) VALUES (?, ?)',
+      [job.klant_id, `💼 ${dv.name} heeft gereageerd op jouw opdracht: "${job.title}"`]);
+    res.status(201).json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET responses for a job (for the klant to view)
+app.get('/job-responses/:jobId', async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT jr.*, u.name AS dv_name, u.category, u.buurt, u.hourly_rate, u.profile_picture
+       FROM job_responses jr JOIN users u ON jr.dienstverlener_id = u.id
+       WHERE jr.job_id = ? ORDER BY jr.created_at ASC`,
+      [req.params.jobId]
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─────────────────────────────────────────
+
+// Auto-create tables on startup
+(async () => {
+  try {
+    await db.query(`CREATE TABLE IF NOT EXISTS messages (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      sender_id INT NOT NULL,
+      receiver_id INT NOT NULL,
+      message TEXT NOT NULL,
+      is_read TINYINT(1) NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_chat (sender_id, receiver_id)
+    )`);
+    await db.query(`CREATE TABLE IF NOT EXISTS jobs (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      klant_id INT NOT NULL,
+      title VARCHAR(255) NOT NULL,
+      description TEXT,
+      category VARCHAR(100) NOT NULL,
+      buurt VARCHAR(100),
+      budget VARCHAR(100),
+      date_needed DATE,
+      status ENUM('open','closed') NOT NULL DEFAULT 'open',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`);
+    await db.query(`CREATE TABLE IF NOT EXISTS job_responses (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      job_id INT NOT NULL,
+      dienstverlener_id INT NOT NULL,
+      message TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`);
+    try { await db.query('ALTER TABLE users ADD COLUMN dnd_mode TINYINT(1) NOT NULL DEFAULT 0'); } catch {}
+  } catch (e) { console.error('DB init:', e.message); }
+})();
 
 app.listen(3000, () => console.log('Server running on http://localhost:3000'));

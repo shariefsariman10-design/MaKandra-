@@ -3,13 +3,15 @@
 
 const API = 'http://localhost:3000';
 
-let currentUser = null;
-let allWorkers  = [];
-let activeCat   = null;
-let calYear     = new Date().getFullYear();
-let calMonth    = new Date().getMonth();
-let calBookings = [];
+let currentUser    = null;
+let allWorkers     = [];
+let activeCat      = null;
+let calYear        = new Date().getFullYear();
+let calMonth       = new Date().getMonth();
+let calBookings    = [];
 let bookingModalEl = null;
+let activeChatUid  = null;
+let chatPollTimer  = null;
 
 // ─────────────────────────────────────────
 // INIT
@@ -18,6 +20,14 @@ let bookingModalEl = null;
 document.addEventListener('DOMContentLoaded', () => {
   const saved = localStorage.getItem('mkd_user');
   if (saved) { currentUser = JSON.parse(saved); afterLogin(); }
+
+  if (localStorage.getItem('mkd_dark') === '1') {
+    document.body.classList.add('dark-mode');
+    const icon  = document.getElementById('dark-mode-icon');
+    const label = document.getElementById('dark-mode-label');
+    if (icon)  icon.textContent  = '☀️';
+    if (label) label.textContent = 'Lichte modus';
+  }
 
   injectDashCSS();
   setupReveal();
@@ -43,7 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelector('#review-modal .modal-x')?.addEventListener('click', () => {
     document.getElementById('review-overlay').classList.add('hidden');
   });
-  document.getElementById('star-selector')?.addEventListener('input', e => updateSlider(e.target.value));
+  updateSlider(10); // default 5 stars
 
   // Close dropdown when clicking outside the user-pill area
   document.addEventListener('click', e => {
@@ -154,7 +164,7 @@ async function handleProviderSignup() {
   const bio          = document.getElementById('pv-tagline')?.value.trim() || '';
   const hourly_rate  = document.getElementById('pv-price')?.value || null;
   const phone        = document.getElementById('pv-phone')?.value.trim() || null;
-  const working_hours = document.getElementById('pv-hours')?.value.trim() || null;
+  const working_hours = _schedPickerVal('pv') || null;
   const errEl        = document.getElementById('provider-error');
   errEl.textContent  = '';
 
@@ -196,6 +206,11 @@ function afterLogin() {
   const un = document.getElementById('nav-username');
   if (un) un.textContent = currentUser.name;
 
+  const isDV = currentUser.role === 'dienstverlener';
+  document.querySelectorAll('.klant-only').forEach(el => {
+    el.style.display = isDV ? 'none' : '';
+  });
+
   // Add "Mijn Profiel" link for dienstverleners
   const dropdown = document.getElementById('user-dropdown');
   if (dropdown && currentUser.role === 'dienstverlener') {
@@ -208,6 +223,22 @@ function afterLogin() {
       dropdown.insertBefore(link, dropdown.firstChild);
     }
   }
+
+  // Chat link in nav
+  if (!document.getElementById('nav-chat-link')) {
+    const navLinks = document.querySelector('.nav-links');
+    if (navLinks) {
+      const a = document.createElement('a');
+      a.id = 'nav-chat-link';
+      a.className = 'nav-link';
+      a.style.position = 'relative';
+      a.innerHTML = '💬 Berichten <span id="chat-nav-badge" style="display:none;background:#e53e3e;color:#fff;border-radius:50%;padding:1px 6px;font-size:.7rem;font-weight:700;margin-left:4px;vertical-align:middle"></span>';
+      a.onclick = () => openChat(null, null, null);
+      navLinks.appendChild(a);
+    }
+  }
+  pollMsgCount();
+  setInterval(pollMsgCount, 15000);
 }
 
 function toggleUserMenu() {
@@ -221,6 +252,8 @@ function toggleMobileMenu() {
 window.toggleMobileMenu = toggleMobileMenu;
 
 function showFavorites() {
+  if (!currentUser) { openAuthModal('login'); return; }
+  if (currentUser.role === 'dienstverlener') { showToast('Favorieten zijn alleen beschikbaar voor klanten.', 'info'); return; }
   showView('favorites');
 }
 window.showFavorites = showFavorites;
@@ -259,10 +292,16 @@ window.showView = showView;
 
 async function loadHomeData() {
   try {
-    const [workersRes, catsRes] = await Promise.all([
+    const [workersRes, catsRes, statsRes] = await Promise.all([
       fetch(API + '/dienstverleners'),
       fetch(API + '/categories'),
+      fetch(API + '/stats'),
     ]);
+
+    const stats = await statsRes.json();
+    const fmt = n => n >= 1000 ? (n / 1000).toFixed(1).replace('.', ',') + 'k+' : n + (n > 0 ? '+' : '');
+    ['stat-dv', 'stat-dv2'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = fmt(stats.dv_count || 0); });
+    ['stat-voltooid', 'stat-voltooid2'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = fmt(stats.voltooid_count || 0); });
     allWorkers = await workersRes.json();
 
     const grid = document.getElementById('top-providers-grid');
@@ -310,19 +349,20 @@ function renderCategoryGrid(cats) {
     name,
     provider_count: apiMap[name]?.provider_count || 0,
     booking_count:  apiMap[name]?.booking_count  || 0,
+    job_count:      apiMap[name]?.job_count       || 0,
   }));
 
   // Sort: categories with most bookings first
   allCats.sort((a, b) => b.booking_count - a.booking_count);
 
   grid.innerHTML = allCats.map(c => {
-    const cls   = CAT_CSS[c.name] || '';
-    const count = c.provider_count;
+    const cls  = CAT_CSS[c.name] || '';
     const icon = CAT_ICONS[c.name] || '🔧';
     return '<div class="cat-card card-' + cls + ' reveal" onclick="browseByCategory(\'' + esc(c.name) + '\')" tabindex="0">' +
       '<div class="cat-icon">' + icon + '</div>' +
       '<div class="cat-name">' + esc(c.name) + '</div>' +
-      '<div class="cat-count">' + count + ' dienstverlener' + (count !== 1 ? 's' : '') + '</div>' +
+      '<div class="cat-count">' + c.provider_count + ' dienstverlener' + (c.provider_count !== 1 ? 's' : '') + '</div>' +
+      (c.job_count > 0 ? '<div class="cat-jobs-badge">💼 ' + c.job_count + ' opdracht' + (c.job_count !== 1 ? 'en' : '') + '</div>' : '') +
     '</div>';
   }).join('');
 }
@@ -346,7 +386,7 @@ function applyFilters() {
   const sort     = document.getElementById('filter-sort')?.value || '';
 
   let filtered = allWorkers.filter(w => {
-    const matchSearch   = !search   || w.name.toLowerCase().includes(search) || (w.category || '').toLowerCase().includes(search) || (w.bio || '').toLowerCase().includes(search);
+    const matchSearch   = !search   || w.name.toLowerCase().includes(search);
     const matchDistrict = !district || w.buurt === district;
     const matchCat      = !activeCat || w.category === activeCat;
     return matchSearch && matchDistrict && matchCat;
@@ -448,41 +488,51 @@ window.heroSearch = heroSearch;
 // ─────────────────────────────────────────
 
 function providerCard(w, rank) {
-  const favs  = getFavs();
-  const isFav = favs.includes(w.id);
+  const favs      = getFavs();
+  const isFav     = favs.includes(w.id);
   const price     = w.hourly_rate ? 'SRD ' + w.hourly_rate + '/u' : '';
   const rankBadge = rank && rank <= 3 ? '<span class="rank-badge">#' + rank + '</span>' : '';
-  const score     = w.avg_score ? '<span class="meta-score">&#9733; ' + w.avg_score + '</span>' : '';
+  const scoreNum  = w.avg_score ? Math.round(w.avg_score * 10) : null;
+  const rc        = w.review_count || 0;
+  const availDot  = w.is_available === 0
+    ? ' <span class="avail-dot busy" title="Bezet"></span>'
+    : ' <span class="avail-dot" title="Beschikbaar"></span>';
+  const favBtn    = (!currentUser || currentUser.role === 'klant')
+    ? '<button class="btn-fav' + (isFav ? ' active' : '') + '" onclick="event.stopPropagation();toggleFav(' + w.id + ',this)" title="Favoriet">' + (isFav ? '&#10084;' : '&#9825;') + '</button>'
+    : '';
 
   return '<div class="provider-card reveal" onclick="showProviderProfile(' + w.id + ')" tabindex="0">' +
     '<div class="provider-card-top">' +
-    rankBadge +
-    '<div class="provider-avatar">' + ini(w.name) + '</div>' +
+      rankBadge +
+      (favBtn ? '<div style="position:absolute;top:8px;right:8px;z-index:2">' + favBtn + '</div>' : '') +
+    '</div>' +
+    '<div class="pcard-avatar-section">' +
+      '<div class="provider-avatar" style="background:' + avatarColor(w.name) + ';color:#fff">' +
+        (w.profile_picture ? '<img src="' + API + w.profile_picture + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover">' : ini(w.name)) +
+      '</div>' +
+      (scoreNum !== null ? '<div class="pcard-score-badge"><span class="pcard-score-num">' + scoreNum + '</span><span class="pcard-review-cnt"> (' + rc + ')</span></div>' : '') +
     '</div>' +
     '<div class="provider-card-body">' +
-    '<div class="provider-name">' + esc(w.name) + '</div>' +
-    '<div class="provider-tagline">' + esc(w.bio || '') + '</div>' +
-    '<div class="provider-meta">' +
-    (w.category ? '<span class="meta-chip">' + esc(w.category) + '</span>' : '') +
-    (w.buurt    ? '<span class="meta-chip">' + esc(w.buurt)    + '</span>' : '') +
-    score +
+      '<div class="provider-name">' + esc(w.name) + availDot + '</div>' +
+      '<div class="provider-tagline">' + esc(w.bio || '') + '</div>' +
+      '<div class="provider-meta">' +
+        (w.buurt    ? '<span class="meta-chip pcard-chip-dist">📍 ' + esc(w.buurt)    + '</span>' : '') +
+        (w.category ? '<span class="meta-chip pcard-chip-cat">🏷 ' + esc(w.category) + '</span>' : '') +
+      '</div>' +
+      (price ? '<div class="provider-price">' + price + '</div>' : '') +
+      '<button class="btn-view-profile" onclick="event.stopPropagation();showProviderProfile(' + w.id + ')">Profiel bekijken →</button>' +
     '</div>' +
-    (price ? '<div class="provider-price">' + price + '</div>' : '') +
-    '<div class="provider-card-actions">' +
-    '<button class="btn-view-profile" onclick="event.stopPropagation();showProviderProfile(' + w.id + ')">Bekijk profiel</button>' +
-    '<button class="btn-fav' + (isFav ? ' active' : '') + '" onclick="event.stopPropagation();toggleFav(' + w.id + ',this)" title="Favoriet">' +
-    (isFav ? '&#10084;' : '&#9825;') +
-    '</button>' +
-    '</div>' +
-    '</div>' +
-    '</div>';
+  '</div>';
 }
 
 // ─────────────────────────────────────────
 // FAVORITES
 // ─────────────────────────────────────────
 
-function getFavs() { return JSON.parse(localStorage.getItem('mkd_fav') || '[]'); }
+function getFavs() {
+  if (!currentUser) return [];
+  return JSON.parse(localStorage.getItem('mkd_fav_' + currentUser.id) || '[]');
+}
 
 function toggleFav(id, btn) {
   let favs = getFavs();
@@ -502,13 +552,17 @@ function toggleFav(id, btn) {
     }
     showToast('Toegevoegd aan favorieten!', 'success');
   }
-  localStorage.setItem('mkd_fav', JSON.stringify(favs));
+  if (currentUser) localStorage.setItem('mkd_fav_' + currentUser.id, JSON.stringify(favs));
 }
 window.toggleFav = toggleFav;
 
 function renderFavoritesView() {
   const el = document.getElementById('favorites-content');
   if (!el) return;
+  if (!currentUser || currentUser.role === 'dienstverlener') {
+    el.innerHTML = '<div class="favorites-empty"><p>Favorieten zijn alleen beschikbaar voor klanten.</p></div>';
+    return;
+  }
   const favs  = getFavs();
   if (favs.length === 0) {
     el.innerHTML = '<div class="favorites-empty"><div class="favorites-empty-icon">&#9825;</div><p>Je hebt nog geen favorieten opgeslagen.</p></div>';
@@ -553,52 +607,124 @@ function _renderProfile(w) {
   const el = document.getElementById('profile-content');
   if (!el) return;
 
-  const favs  = getFavs();
-  const isFav = favs.includes(w.id);
-  const price = w.hourly_rate ? 'SRD ' + w.hourly_rate + ' / uur' : 'Prijs op aanvraag';
-  const canBook = currentUser && currentUser.role === 'klant';
+  const favs     = getFavs();
+  const isFav    = favs.includes(w.id);
+  const canBook  = currentUser && currentUser.role === 'klant';
+  const scoreNum = w.avg_score ? Math.round(w.avg_score * 10) : 0;
+  const availBadge = w.is_available === 0
+    ? '<span class="prof-avail-badge busy">Bezet</span>'
+    : '<span class="prof-avail-badge">Beschikbaar</span>';
+
+  let skillsTags = '';
+  if (w.category) skillsTags += '<span class="vaard-tag">' + esc(w.category) + '</span>';
+  if (w.experience && w.experience !== w.category) skillsTags += '<span class="vaard-tag">' + esc(w.experience) + '</span>';
 
   el.innerHTML =
-    '<div class="profile-header-bg">' +
-      '<div class="profile-header-inner">' +
-        '<button class="profile-back" onclick="showView(\'browse\')">&#8592; Terug</button>' +
-        '<div class="profile-top">' +
-          (w.profile_picture ? '<img src="' + API + w.profile_picture + '" class="profile-avatar-lg" style="object-fit:cover">' : '<div class="profile-avatar-lg">' + ini(w.name) + '</div>') +
-          '<div class="profile-header-info">' +
-            '<h2>' + esc(w.name) + '</h2>' +
-            (w.category ? '<div class="profile-cat">' + esc(w.category) + '</div>' : '') +
-            (w.buurt    ? '<div class="profile-district">' + esc(w.buurt)    + '</div>' : '') +
-          '</div>' +
-          '<div class="profile-header-side">' +
-            '<div class="profile-price">' + price + '</div>' +
-            '<div class="profile-action-btns">' +
-              (canBook ? '<button class="btn-contact" onclick="openBookingModal(' + w.id + ',\'' + esc(w.name) + '\')">Boek nu</button>' : '') +
-              '<button class="btn-fav-profile' + (isFav ? ' active' : '') + '" onclick="toggleFav(' + w.id + ',this)">' +
-              (isFav ? '&#10084; Favoriet' : '&#9825; Opslaan') + '</button>' +
+    '<div class="prof-layout">' +
+      '<button class="profile-back" onclick="showView(\'browse\')">&#8592; Terug naar overzicht</button>' +
+      '<div class="prof-columns">' +
+
+        '<div class="prof-main">' +
+
+          // Header card
+          '<div class="prof-card prof-header-card">' +
+            '<div class="prof-avatar-col">' +
+              (w.profile_picture
+                ? '<img src="' + API + w.profile_picture + '" class="prof-avatar-img">'
+                : '<div class="prof-avatar-circle" style="background:' + avatarColor(w.name) + '">' + ini(w.name) + '</div>') +
+              availBadge +
+            '</div>' +
+            '<div class="prof-header-info">' +
+              '<h2 class="prof-name">' + esc(w.name) + '</h2>' +
+              (w.experience ? '<p class="prof-exp">' + esc(w.experience) + '</p>' : '') +
+              '<div class="prof-header-actions">' +
+                (canBook ? '<button class="btn-primary" onclick="openBookingModal(' + w.id + ',\'' + esc(w.name) + '\',\'' + esc(w.working_hours || '') + '\',' + (w.hourly_rate || 0) + ')">Boek nu</button>' : '') +
+                ((!currentUser || currentUser.role === 'klant')
+                  ? '<button class="btn-fav-profile' + (isFav ? ' active' : '') + '" onclick="toggleFav(' + w.id + ',this)">' + (isFav ? '&#10084; Favoriet' : '&#9825; Opslaan') + '</button>'
+                  : '') +
+              '</div>' +
             '</div>' +
           '</div>' +
+
+          // Over
+          '<div class="prof-card">' +
+            '<div class="prof-section-title">Over ' + esc(w.name.split(' ')[0]) + '</div>' +
+            '<p style="color:#555;line-height:1.75">' + esc(w.bio || 'Geen beschrijving beschikbaar.') + '</p>' +
+          '</div>' +
+
+          // Vertrouwensscore
+          '<div class="prof-card">' +
+            '<div class="prof-section-title">🥇 Vertrouwensscore</div>' +
+            '<div class="trust-stats">' +
+              '<div class="trust-stat-box"><div class="ts-icon">👥</div><div class="ts-num" id="ts-clients">—</div><div class="ts-label">Totale klanten</div></div>' +
+              '<div class="trust-stat-box"><div class="ts-icon">🔄</div><div class="ts-num" id="ts-returning">—</div><div class="ts-label">Terugkerende klanten</div></div>' +
+              '<div class="trust-stat-box"><div class="ts-icon">⭐</div><div class="ts-num">' + (w.review_count || '—') + '</div><div class="ts-label">Beoordelingen</div></div>' +
+            '</div>' +
+            '<div class="trust-bars">' +
+              '<div class="trust-bar-row"><span>Beoordelingen score</span><div class="trust-bar"><div class="trust-bar-fill" style="width:' + scoreNum + '%"></div></div><span>' + scoreNum + '%</span></div>' +
+              '<div class="trust-bar-row"><span>Terugkerende klanten</span><div class="trust-bar"><div class="trust-bar-fill tb-blue" id="tb-returning" style="width:0%"></div></div><span id="tbl-returning">—</span></div>' +
+            '</div>' +
+            (w.working_hours ? '<div class="trust-hours">🕒 Werktijden: ' + esc(fmtSchedule(w.working_hours)) + '</div>' : '') +
+          '</div>' +
+
+          // Vaardigheden
+          '<div class="prof-card">' +
+            '<div class="prof-section-title">Vaardigheden</div>' +
+            '<div class="vaardigheden-tags">' + (skillsTags || '<em style="color:#aaa">Geen vaardigheden opgegeven.</em>') + '</div>' +
+          '</div>' +
+
+          // Review button
+          (currentUser && currentUser.role === 'klant'
+            ? '<div class="prof-card"><div class="prof-section-title">Review plaatsen</div><button class="btn-contact" onclick="openReviewModal(' + w.id + ')">Review schrijven</button></div>'
+            : '') +
+
+          // Reviews list
+          '<div class="prof-card">' +
+            '<div class="prof-section-title">Beoordelingen (' + (w.review_count || 0) + ')</div>' +
+            '<div id="reviews-list"><p style="color:#aaa">Laden...</p></div>' +
+          '</div>' +
+
         '</div>' +
-      '</div>' +
-    '</div>' +
-    '<div class="profile-body">' +
-      '<div class="profile-section">' +
-        '<div class="profile-section-title">Over mij</div>' +
-        '<div class="profile-description">' + esc(w.bio || 'Geen beschrijving beschikbaar.') + '</div>' +
-      '</div>' +
-      (currentUser && currentUser.role === 'klant'
-        ? '<div class="profile-section">' +
-            '<div class="profile-section-title">Review plaatsen</div>' +
-            '<button class="btn-contact" onclick="openReviewModal(' + w.id + ')">Review schrijven</button>' +
-          '</div>'
-        : '') +
-      '<div class="profile-section" id="reviews-section">' +
-        '<div class="profile-section-title">Beoordelingen</div>' +
-        '<div id="reviews-list"><p>Beoordelingen laden...</p></div>' +
+
+        // RIGHT SIDEBAR
+        '<div class="prof-sidebar">' +
+
+          // Dienst info
+          '<div class="prof-card">' +
+            '<div class="prof-section-title">Dienst info</div>' +
+            '<table class="dienst-info-table">' +
+              (w.buurt    ? '<tr><td>District</td><td class="di-val">'   + esc(w.buurt)    + '</td></tr>' : '') +
+              (w.category ? '<tr><td>Categorie</td><td class="di-val">'  + esc(w.category) + '</td></tr>' : '') +
+              '<tr><td>Klanten</td><td class="di-val" id="di-clients">—</td></tr>' +
+              '<tr><td>Terugkerende</td><td class="di-val" id="di-returning">—</td></tr>' +
+              '<tr><td>Beoordelingen</td><td class="di-val">' + (w.review_count || '—') + '</td></tr>' +
+              (w.avg_score ? '<tr><td>Score</td><td class="di-val di-green">' + scoreNum + '%</td></tr>' : '') +
+              (w.working_hours ? '<tr><td>Werktijden</td><td class="di-val">' + esc(fmtSchedule(w.working_hours)) + '</td></tr>' : '') +
+            '</table>' +
+            (w.hourly_rate
+              ? '<div class="dienst-price-box"><div class="dienst-price">SRD ' + w.hourly_rate + '/uur</div><div class="dienst-price-label">Indicatief tarief</div></div>'
+              : '') +
+          '</div>' +
+
+          // Contact
+          (w.email || w.phone
+            ? '<div class="prof-card">' +
+                '<div class="prof-section-title">Contact</div>' +
+                '<table class="dienst-info-table">' +
+                  (w.email ? '<tr><td>E-mail</td><td class="di-val" style="word-break:break-all;font-size:.8rem">' + esc(w.email) + '</td></tr>' : '') +
+                  (w.phone ? '<tr><td>Telefoon</td><td class="di-val">' + esc(w.phone) + '</td></tr>' : '') +
+                '</table>' +
+                (currentUser ? '<button class="btn-stuur-bericht" onclick="openChat(' + w.id + ',\'' + esc(w.name) + '\',\'' + esc(w.profile_picture || '') + '\')">💬 Stuur bericht</button>' : '') +
+              '</div>'
+            : '') +
+
+        '</div>' +
       '</div>' +
     '</div>';
 
   showView('profile');
   _loadReviews(w.id);
+  _loadProviderStats(w.id);
 }
 
 async function _loadReviews(providerId) {
@@ -608,35 +734,75 @@ async function _loadReviews(providerId) {
     const r = await fetch(API + '/reviews/' + providerId);
     const reviews = await r.json();
     if (!reviews.length) {
-      container.innerHTML = '<p>Nog geen beoordelingen.</p>';
+      container.innerHTML = '<p style="color:#aaa">Nog geen beoordelingen.</p>';
       return;
     }
     container.innerHTML = reviews.map(rv =>
       '<div class="review-item">' +
         '<div class="review-header">' +
           '<strong>' + esc(rv.reviewer_name || 'Anoniem') + '</strong>' +
-          '<span class="review-score">' + rv.score + '/10</span>' +
+          '<span class="review-score">' + '★'.repeat(Math.round(rv.score / 2)) + '☆'.repeat(5 - Math.round(rv.score / 2)) + '</span>' +
         '</div>' +
-        '<p>' + esc(rv.text) + '</p>' +
+        '<p style="color:#555;margin:4px 0 0">' + esc(rv.text) + '</p>' +
       '</div>'
     ).join('');
   } catch {
-    container.innerHTML = '<p>Kon beoordelingen niet laden.</p>';
+    container.innerHTML = '<p style="color:#aaa">Kon beoordelingen niet laden.</p>';
   }
+}
+
+async function _loadProviderStats(providerId) {
+  try {
+    const r = await fetch(API + '/provider-stats/' + providerId);
+    if (!r.ok) return;
+    const s = await r.json();
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    set('ts-clients',   s.total_clients);
+    set('ts-returning', s.returning_clients);
+    set('di-clients',   s.total_clients);
+    set('di-returning', s.returning_clients);
+    if (s.total_clients > 0) {
+      const pct = Math.round(s.returning_clients / s.total_clients * 100);
+      const bar = document.getElementById('tb-returning');
+      const lbl = document.getElementById('tbl-returning');
+      if (bar) bar.style.width = pct + '%';
+      if (lbl) lbl.textContent = pct + '%';
+    }
+  } catch { /* silent */ }
 }
 
 // ─────────────────────────────────────────
 // BOOKING MODAL (created dynamically)
 // ─────────────────────────────────────────
 
-function openBookingModal(workerId, workerName) {
+function openBookingModal(workerId, workerName, workingHoursRaw, hourlyRate) {
   if (!currentUser) { openAuthModal('login'); return; }
   if (!bookingModalEl) _createBookingModal();
 
+  bookingModalEl.dataset.workerId     = workerId;
+  bookingModalEl.dataset.workerName   = workerName;
+  bookingModalEl.dataset.workingHours = workingHoursRaw || '';
+  bookingModalEl.dataset.hourlyRate   = hourlyRate || 0;
+
+  // Header
   document.getElementById('bk-worker-name').textContent = workerName;
-  bookingModalEl.dataset.workerId   = workerId;
-  bookingModalEl.dataset.workerName = workerName;
+  const avatarEl = document.getElementById('bk-avatar');
+  if (avatarEl) { avatarEl.textContent = ini(workerName); avatarEl.style.background = avatarColor(workerName); }
+
+  // Reset fields
   document.getElementById('bk-error').textContent = '';
+  document.getElementById('bk-date').value = '';
+  document.getElementById('bk-date').min   = new Date().toISOString().split('T')[0];
+  document.getElementById('bk-slots').innerHTML = '<p class="bk-slots-placeholder">Kies eerst een datum</p>';
+  document.getElementById('bk-msg').value  = '';
+  document.getElementById('bk-price-est').style.display = 'none';
+  // Reset duration to 60min
+  document.querySelectorAll('.bk-dur-chip').forEach(c => c.classList.toggle('active', c.dataset.min === '60'));
+
+  let sched = null;
+  try { sched = JSON.parse(workingHoursRaw || ''); } catch (e) {}
+  _bkApplySchedule(sched);
+
   document.getElementById('bk-overlay').classList.remove('hidden');
 }
 window.openBookingModal = openBookingModal;
@@ -645,35 +811,159 @@ function _createBookingModal() {
   const overlay = document.createElement('div');
   overlay.id        = 'bk-overlay';
   overlay.className = 'overlay hidden';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px';
+
+  const DURS = [['30 min', 30], ['1 uur', 60], ['1,5 uur', 90], ['2 uur', 120], ['3 uur', 180], ['4 uur', 240]];
+
   overlay.innerHTML =
-    '<div class="modal" id="bk-modal">' +
+    '<div class="modal bk-modal-wrap" id="bk-modal">' +
       '<button class="modal-x" id="bk-close">&#10005;</button>' +
-      '<h3>Boeking bij <span id="bk-worker-name"></span></h3>' +
+
+      // Provider header
+      '<div class="bk-provider-header">' +
+        '<div class="bk-avatar" id="bk-avatar">?</div>' +
+        '<div>' +
+          '<div style="font-size:.75rem;color:#999;margin-bottom:2px">Boeking bij</div>' +
+          '<div style="font-weight:700;font-size:1.05rem" id="bk-worker-name"></div>' +
+        '</div>' +
+      '</div>' +
+
+      // Schedule hint
+      '<div id="bk-schedule-hint" style="display:none;background:#f0eeff;border:1px solid #d5c8ff;border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:.82rem;color:#5a3fc0;line-height:1.6"></div>' +
+
+      // Date
       '<div class="form-group"><label>Datum</label><input type="date" id="bk-date"></div>' +
-      '<div class="form-group"><label>Tijd</label><input type="time" id="bk-time"></div>' +
-      '<div class="form-group"><label>Duur (minuten)</label><input type="number" id="bk-dur" value="60" min="30" step="30"></div>' +
-      '<div class="form-group"><label>Bericht (optioneel)</label><textarea id="bk-msg" rows="3"></textarea></div>' +
+      '<div id="bk-day-error" style="display:none;color:#e53e3e;font-size:.8rem;margin-top:-8px;margin-bottom:10px"></div>' +
+
+      // Duration chips
+      '<div class="form-group">' +
+        '<label>Duur</label>' +
+        '<div class="bk-dur-chips">' +
+          DURS.map(([label, min]) =>
+            '<button type="button" class="bk-dur-chip' + (min === 60 ? ' active' : '') + '" data-min="' + min + '" onclick="bkPickDur(this)">' + label + '</button>'
+          ).join('') +
+        '</div>' +
+      '</div>' +
+
+      // Time slots
+      '<div class="form-group">' +
+        '<label>Tijdstip</label>' +
+        '<div class="bk-slots" id="bk-slots"><p class="bk-slots-placeholder">Kies eerst een datum</p></div>' +
+      '</div>' +
+
+      // Price estimate
+      '<div id="bk-price-est" class="bk-price-est" style="display:none"></div>' +
+
+      // Message
+      '<div class="form-group"><label>Bericht <span style="color:#aaa;font-weight:400">(optioneel)</span></label><textarea id="bk-msg" rows="3" placeholder="Beschrijf wat je nodig hebt..."></textarea></div>' +
+
       '<div class="form-error" id="bk-error"></div>' +
       '<button class="btn-primary btn-full" id="bk-submit">Verstuur aanvraag</button>' +
     '</div>';
+
   document.body.appendChild(overlay);
   bookingModalEl = document.getElementById('bk-modal');
 
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.add('hidden'); });
   document.getElementById('bk-close').addEventListener('click', () => overlay.classList.add('hidden'));
   document.getElementById('bk-submit').addEventListener('click', submitBooking);
+  document.getElementById('bk-date').addEventListener('change', _bkOnDateChange);
+}
+
+function bkPickDur(btn) {
+  document.querySelectorAll('.bk-dur-chip').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  // Regenerate slots with new duration
+  const date = document.getElementById('bk-date').value;
+  if (date) _bkBuildSlots(date);
+  _bkUpdatePrice();
+}
+window.bkPickDur = bkPickDur;
+
+function _bkGetDur() {
+  return parseInt(document.querySelector('.bk-dur-chip.active')?.dataset.min || '60');
+}
+
+function _bkBuildSlots(dateVal) {
+  const slotsEl = document.getElementById('bk-slots');
+  if (!slotsEl) return;
+  let sched = null;
+  try { sched = JSON.parse(bookingModalEl.dataset.workingHours || ''); } catch (e) {}
+
+  const dur      = _bkGetDur();
+  const start    = sched?.start || '08:00';
+  const end      = sched?.end   || '20:00';
+  const startMin = _timeToMin(start);
+  const endMin   = _timeToMin(end);
+
+  const slots = [];
+  for (let m = startMin; m + dur <= endMin; m += 30) {
+    slots.push(m);
+  }
+
+  if (!slots.length) { slotsEl.innerHTML = '<p class="bk-slots-placeholder">Geen beschikbare tijden.</p>'; return; }
+
+  slotsEl.innerHTML = slots.map(m => {
+    const t = mkdMinToTime(m);
+    return '<button type="button" class="bk-slot" data-time="' + t + '" onclick="bkPickSlot(this)">' + t + '</button>';
+  }).join('');
+}
+
+function bkPickSlot(btn) {
+  document.querySelectorAll('.bk-slot').forEach(s => s.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('bk-error').textContent = '';
+  _bkUpdatePrice();
+}
+window.bkPickSlot = bkPickSlot;
+
+function _bkUpdatePrice() {
+  const rate    = parseFloat(bookingModalEl?.dataset.hourlyRate || 0);
+  const dur     = _bkGetDur();
+  const priceEl = document.getElementById('bk-price-est');
+  if (!priceEl) return;
+  if (!rate) { priceEl.style.display = 'none'; return; }
+  const est = (rate * dur / 60).toFixed(0);
+  priceEl.style.display = '';
+  priceEl.innerHTML = '💰 Geschatte kosten: <strong>SRD ' + est + '</strong> <span style="font-size:.78rem;opacity:.7">(bij SRD ' + rate + '/u)</span>';
 }
 
 async function submitBooking() {
   const workerId         = bookingModalEl.dataset.workerId;
   const date             = document.getElementById('bk-date').value;
-  const time             = document.getElementById('bk-time').value;
-  const duration_minutes = parseInt(document.getElementById('bk-dur').value) || 60;
+  const activeSlot       = document.querySelector('.bk-slot.active');
+  const time             = activeSlot?.dataset.time || '';
+  const duration_minutes = _bkGetDur();
   const message          = document.getElementById('bk-msg').value.trim();
   const errEl            = document.getElementById('bk-error');
 
   if (!date) { errEl.textContent = 'Kies een datum.'; return; }
-  if (new Date(date) < new Date(new Date().toDateString())) { errEl.textContent = 'Kies een datum in de toekomst.'; return; }
+  const [y, m, d] = date.split('-').map(Number);
+  if (new Date(y, m - 1, d) < new Date(new Date().toDateString())) { errEl.textContent = 'Kies een datum in de toekomst.'; return; }
+  if (!time) { errEl.textContent = 'Kies een tijdstip.'; return; }
+
+  let sched = null;
+  try { sched = JSON.parse(bookingModalEl.dataset.workingHours || ''); } catch (e) {}
+
+  if (sched && sched.days && sched.days.length) {
+    const DAY_MAP = { zo:0, ma:1, di:2, wo:3, do:4, vr:5, za:6 };
+    const DAY_NL  = { ma:'Maandag', di:'Dinsdag', wo:'Woensdag', do:'Donderdag', vr:'Vrijdag', za:'Zaterdag', zo:'Zondag' };
+    const dow     = new Date(y, m - 1, d).getDay();
+    const dayKey  = Object.keys(DAY_MAP).find(k => DAY_MAP[k] === dow);
+    if (!sched.days.includes(dayKey)) {
+      errEl.textContent = 'Niet beschikbaar op die dag. Werkdagen: ' + sched.days.map(k => DAY_NL[k] || k).join(', ') + '.';
+      return;
+    }
+  }
+
+  if (sched && sched.start && sched.end) {
+    const bookStart = _timeToMin(time);
+    const bookEnd   = bookStart + duration_minutes;
+    const workStart = _timeToMin(sched.start);
+    const workEnd   = _timeToMin(sched.end);
+    if (bookStart < workStart) { errEl.textContent = 'Werktijd begint om ' + sched.start + '.'; return; }
+    if (bookEnd > workEnd)     { errEl.textContent = 'Boeking eindigt na sluitingstijd (' + sched.end + '). Kies een eerder tijdstip of kortere duur.'; return; }
+  }
 
   try {
     const r = await fetch(API + '/bookings', {
@@ -687,6 +977,53 @@ async function submitBooking() {
   } catch { errEl.textContent = 'Verbindingsfout.'; }
 }
 
+function _bkApplySchedule(sched) {
+  const hint   = document.getElementById('bk-schedule-hint');
+  const timeEl = document.getElementById('bk-time');
+  if (!sched || !sched.days || !sched.days.length) {
+    if (hint) hint.style.display = 'none';
+    if (timeEl) { timeEl.removeAttribute('min'); timeEl.removeAttribute('max'); }
+    return;
+  }
+  const DAY_NL = { ma:'Ma', di:'Di', wo:'Wo', do:'Do', vr:'Vr', za:'Za', zo:'Zo' };
+  const dayStr = sched.days.map(k => DAY_NL[k] || k).join(' · ');
+  if (hint) {
+    hint.style.display = '';
+    hint.innerHTML = '<strong>📅 Werkdagen:</strong> ' + dayStr +
+      (sched.start && sched.end ? '<br><strong>🕒 Werktijden:</strong> ' + sched.start + ' – ' + sched.end : '');
+  }
+  if (timeEl && sched.start) timeEl.min = sched.start;
+  if (timeEl && sched.end)   timeEl.max = sched.end;
+}
+
+function _bkOnDateChange() {
+  const dateVal  = this.value;
+  const dayErrEl = document.getElementById('bk-day-error');
+  const slotsEl  = document.getElementById('bk-slots');
+  if (!dateVal || !bookingModalEl) {
+    if (dayErrEl) dayErrEl.style.display = 'none';
+    if (slotsEl)  slotsEl.innerHTML = '<p class="bk-slots-placeholder">Kies eerst een datum</p>';
+    return;
+  }
+  let sched = null;
+  try { sched = JSON.parse(bookingModalEl.dataset.workingHours || ''); } catch (e) {}
+
+  const DAY_MAP = { zo:0, ma:1, di:2, wo:3, do:4, vr:5, za:6 };
+  const DAY_NL  = { ma:'Maandag', di:'Dinsdag', wo:'Woensdag', do:'Donderdag', vr:'Vrijdag', za:'Zaterdag', zo:'Zondag' };
+  const [y, m, d] = dateVal.split('-').map(Number);
+  const dow    = new Date(y, m - 1, d).getDay();
+  const dayKey = Object.keys(DAY_MAP).find(k => DAY_MAP[k] === dow);
+
+  if (sched && sched.days && sched.days.length && !sched.days.includes(dayKey)) {
+    dayErrEl.textContent = '⚠ Niet beschikbaar op ' + (DAY_NL[dayKey] || dayKey) + '. Werkdagen: ' + sched.days.map(k => DAY_NL[k] || k).join(', ') + '.';
+    dayErrEl.style.display = '';
+    if (slotsEl) slotsEl.innerHTML = '<p class="bk-slots-placeholder">Geen tijden op deze dag.</p>';
+  } else {
+    dayErrEl.style.display = 'none';
+    _bkBuildSlots(dateVal);
+  }
+}
+
 // ─────────────────────────────────────────
 // REVIEW MODAL
 // ─────────────────────────────────────────
@@ -696,7 +1033,7 @@ function openReviewModal(providerId) {
   document.getElementById('review-target-id').value = providerId;
   document.getElementById('review-text').value      = '';
   document.getElementById('review-error').textContent = '';
-  updateSlider(5);
+  updateSlider(10);
   document.getElementById('review-overlay').classList.remove('hidden');
 }
 window.openReviewModal = openReviewModal;
@@ -708,13 +1045,34 @@ function closeReviewModal(e) {
 }
 
 function updateSlider(val) {
-  const slider  = document.getElementById('star-selector');
-  const hidden  = document.getElementById('review-rating');
-  const display = document.getElementById('review-rating-display');
-  if (slider)  slider.value       = val;
-  if (hidden)  hidden.value       = val;
-  if (display) display.textContent = val + '/10';
+  const hidden = document.getElementById('review-rating');
+  if (hidden) hidden.value = val;
+  document.querySelectorAll('#star-selector .star').forEach(s => {
+    s.classList.toggle('active', +s.dataset.val <= +val);
+    s.classList.remove('hover');
+  });
 }
+
+function starHover(val) {
+  document.querySelectorAll('#star-selector .star').forEach(s => {
+    s.classList.toggle('hover', +s.dataset.val <= val);
+  });
+}
+window.starHover = starHover;
+
+function starOut() {
+  const cur = +(document.getElementById('review-rating')?.value || 10);
+  document.querySelectorAll('#star-selector .star').forEach(s => {
+    s.classList.remove('hover');
+    s.classList.toggle('active', +s.dataset.val <= cur);
+  });
+}
+window.starOut = starOut;
+
+function starPick(val) {
+  updateSlider(val);
+}
+window.starPick = starPick;
 
 async function submitReview() {
   if (submitReview._running) return;
@@ -783,6 +1141,7 @@ function renderDVDash(el) {
         '<nav>' +
           '<div class="dash-menu-item active" onclick="dvTab(\'overzicht\',this)">Overzicht</div>' +
           '<div class="dash-menu-item" onclick="dvTab(\'boekingen\',this)">Boekingen</div>' +
+          '<div class="dash-menu-item" onclick="dvTab(\'opdrachten\',this)">Opdrachten</div>' +
           '<div class="dash-menu-item" onclick="dvTab(\'agenda\',this)">Agenda</div>' +
           '<div class="dash-menu-item" onclick="dvTab(\'notificaties\',this)">Notificaties</div>' +
           '<div class="dash-menu-item" onclick="dvTab(\'profiel\',this)">Profiel bewerken</div>' +
@@ -790,7 +1149,7 @@ function renderDVDash(el) {
         '</nav>' +
       '</aside>' +
       '<div class="dashboard-panel">' +
-        _dvOverzicht() + _dvBoekingen() + _dvAgenda() + _dvNotifs() + _dvProfiel() + _dvAccount() +
+        _dvOverzicht() + _dvBoekingen() + _dvOpdrachten() + _dvAgenda() + _dvNotifs() + _dvProfiel() + _dvAccount() +
       '</div>' +
     '</div>';
 
@@ -806,14 +1165,39 @@ function dvTab(panel, el) {
   const target = document.getElementById('dv-p-' + panel);
   if (target) target.classList.remove('hidden');
   if (panel === 'boekingen')    loadBookingsDV();
+  if (panel === 'opdrachten')   loadDVOpdrachten();
   if (panel === 'agenda')       renderCalendar();
   if (panel === 'notificaties') loadDVNotifications();
 }
 window.dvTab = dvTab;
 
 function _dvOverzicht() {
+  const isAvail = currentUser.is_available !== 0;
   return '<div class="dash-panel" id="dv-p-overzicht">' +
     '<div class="dashboard-panel-title">Welkom, ' + esc(currentUser.name) + '</div>' +
+    '<div class="avail-toggle-card">' +
+      '<div class="avail-toggle-info">' +
+        '<span class="avail-toggle-dot' + (isAvail ? '' : ' busy') + '"></span>' +
+        '<div>' +
+          '<strong>' + (isAvail ? 'Beschikbaar' : 'Bezet') + '</strong>' +
+          '<div style="font-size:.8rem;color:#888">Klanten kunnen ' + (isAvail ? '' : 'geen ') + 'boeking aanvragen</div>' +
+        '</div>' +
+      '</div>' +
+      '<label class="avail-switch">' +
+        '<input type="checkbox" id="avail-check"' + (isAvail ? ' checked' : '') + ' onchange="toggleAvailability(this.checked)">' +
+        '<span class="avail-slider"></span>' +
+      '</label>' +
+    '</div>' +
+    '<div class="dnd-toggle-card">' +
+      '<div class="avail-toggle-info">' +
+        '<span style="font-size:1.2rem">⛔</span>' +
+        '<div><strong>Niet Storen</strong><div style="font-size:.8rem;color:#888">Blokkeer inkomende berichten</div></div>' +
+      '</div>' +
+      '<label class="avail-switch">' +
+        '<input type="checkbox" id="dnd-check"' + (currentUser.dnd_mode ? ' checked' : '') + ' onchange="toggleDND(this.checked)">' +
+        '<span class="avail-slider dnd-slider"></span>' +
+      '</label>' +
+    '</div>' +
     '<div class="dash-stat-row">' +
       '<div class="dash-card">Categorie<br><strong>' + esc(currentUser.category || '-') + '</strong></div>' +
       '<div class="dash-card">Buurt<br><strong>'     + esc(currentUser.buurt    || '-') + '</strong></div>' +
@@ -854,12 +1238,16 @@ function _dvNotifs() {
 function _dvProfiel() {
   return '<div class="dash-panel hidden" id="dv-p-profiel">' +
     '<div class="dashboard-panel-title">Profiel bewerken</div>' +
-    '<div class="form-group"><label>Profielfoto</label>' +
-    '<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">' +
-    (currentUser.profile_picture ? '<img src="' + API + currentUser.profile_picture + '" style="width:56px;height:56px;border-radius:50%;object-fit:cover">' : '<div class="dash-avatar" style="width:56px;height:56px;font-size:1.2rem">' + ini(currentUser.name) + '</div>') +
-    '<input type="file" id="dv-avatar" accept="image/*">' +
+    '<div class="form-group">' +
+    '<label>Profielfoto</label>' +
+    '<div class="pfp-upload-wrap" onclick="document.getElementById(\'dv-avatar\').click()" title="Klik om foto te wijzigen">' +
+    (currentUser.profile_picture
+      ? '<img src="' + API + currentUser.profile_picture + '" class="pfp-upload-img">'
+      : '<div class="dash-avatar pfp-upload-img" style="font-size:1.8rem">' + ini(currentUser.name) + '</div>') +
+    '<div class="pfp-overlay">📷</div>' +
     '</div>' +
-    '<button class="btn-primary" onclick="uploadAvatar()" style="margin-bottom:12px">Foto uploaden</button>' +
+    '<div style="font-size:.75rem;color:#aaa;margin-top:8px">Klik op de foto om te wijzigen</div>' +
+    '<input type="file" id="dv-avatar" accept="image/*" style="display:none" onchange="uploadAvatarFor(\'dv\')">' +
     '<div class="form-error" id="dv-avatar-msg"></div>' +
     '</div>' +
     '<div class="form-group"><label>Naam</label><input type="text" id="dv-name" value="' + esc(currentUser.name) + '"></div>' +
@@ -868,16 +1256,71 @@ function _dvProfiel() {
     '<div class="form-group"><label>Bio</label><textarea id="dv-bio" rows="4">' + esc(currentUser.bio || '') + '</textarea></div>' +
     '<div class="form-group"><label>Uurtarief (SRD)</label><input type="number" id="dv-rate" value="' + (currentUser.hourly_rate || '') + '"></div>' +
     '<div class="form-group"><label>Telefoon</label><input type="tel" id="dv-phone" value="' + esc(currentUser.phone || '') + '" placeholder="+597 ..."></div>' +
-    '<div class="form-group"><label>Werktijden</label><input type="text" id="dv-hours" value="' + esc(currentUser.working_hours || '') + '" placeholder="bijv. Ma–Vr 08:00–17:00"></div>' +
+    '<div class="form-group"><label>Werktijden</label>' + _schedPickerHTML('dv', currentUser.working_hours) + '</div>' +
     '<div class="form-group"><label>Buurt</label><select id="dv-buurt">' + distOpts(currentUser.buurt) + '</select></div>' +
     '<button class="btn-primary" onclick="saveProfile()">Opslaan</button>' +
     '<div class="form-error" id="dv-prof-msg"></div>' +
   '</div>';
 }
 
+function _dvOpdrachten() {
+  return '<div class="dash-panel hidden" id="dv-p-opdrachten">' +
+    '<div class="dashboard-panel-title">Beschikbare opdrachten</div>' +
+    '<p style="font-size:.82rem;color:#888;margin-bottom:14px">Opdrachten in jouw categorie: <strong>' + esc(currentUser.category || '—') + '</strong></p>' +
+    '<div id="dv-job-list"><p style="color:#aaa;font-size:.85rem">Laden...</p></div>' +
+  '</div>';
+}
+
+async function loadDVOpdrachten() {
+  const el = document.getElementById('dv-job-list');
+  if (!el) return;
+  try {
+    const url  = currentUser.category ? API + '/jobs?category=' + encodeURIComponent(currentUser.category) : API + '/jobs';
+    const r    = await fetch(url);
+    const jobs = await r.json();
+    if (!jobs.length) { el.innerHTML = '<p class="empty-plain">Geen opdrachten gevonden in jouw categorie.</p>'; return; }
+    el.innerHTML = jobs.map(j =>
+      '<div class="job-card">' +
+        '<div class="job-card-top">' +
+          '<div>' +
+            '<div class="job-title">' + esc(j.title) + '</div>' +
+            '<div class="job-meta">' + esc(j.klant_name) + ' · ' + esc(j.category) + (j.buurt ? ' · ' + esc(j.buurt) : '') + (j.date_needed ? ' · ' + j.date_needed : '') + '</div>' +
+          '</div>' +
+          (j.budget ? '<span class="job-budget-tag">💰 ' + esc(j.budget) + '</span>' : '') +
+        '</div>' +
+        (j.description ? '<div class="job-desc-text">' + esc(j.description) + '</div>' : '') +
+        '<div class="job-respond-wrap" id="jrw-' + j.id + '">' +
+          '<textarea class="job-respond-input" id="jri-' + j.id + '" placeholder="Schrijf een korte reactie (optioneel)..." rows="2"></textarea>' +
+          '<button class="btn-primary" style="margin-top:6px;font-size:.82rem;padding:8px 18px" onclick="respondToJob(' + j.id + ')">Reageren</button>' +
+          '<div class="form-error" id="jre-' + j.id + '"></div>' +
+        '</div>' +
+      '</div>'
+    ).join('');
+  } catch { el.innerHTML = '<p>Fout bij laden opdrachten.</p>'; }
+}
+
+async function respondToJob(jobId) {
+  const msg   = document.getElementById('jri-' + jobId)?.value.trim();
+  const errEl = document.getElementById('jre-' + jobId);
+  try {
+    const r = await fetch(API + '/job-responses', {
+      method: 'POST', headers: ct(),
+      body: JSON.stringify({ job_id: jobId, dienstverlener_id: currentUser.id, message: msg || null }),
+    });
+    const data = await r.json();
+    if (!r.ok) { if (errEl) errEl.textContent = data.error; return; }
+    showToast('Reactie verstuurd!', 'success');
+    const wrap = document.getElementById('jrw-' + jobId);
+    if (wrap) wrap.innerHTML = '<p style="color:#6c47ff;font-size:.82rem;font-weight:600;padding:6px 0">✓ Gereageerd</p>';
+  } catch { if (errEl) errEl.textContent = 'Verbindingsfout.'; }
+}
+window.respondToJob = respondToJob;
+
 function _dvAccount() {
+  const isDark = document.body.classList.contains('dark-mode');
   return '<div class="dash-panel hidden" id="dv-p-account">' +
     '<div class="dashboard-panel-title">Account instellingen</div>' +
+    _darkModeCard() +
     '<div class="form-group"><label>Nieuw e-mailadres</label><input type="email" id="dv-new-email" placeholder="' + esc(currentUser.email) + '"></div>' +
     '<div class="form-group"><label>Huidig wachtwoord</label><input type="password" id="dv-cur-pw"></div>' +
     '<div class="form-group"><label>Nieuw wachtwoord</label><input type="password" id="dv-new-pw"></div>' +
@@ -900,16 +1343,19 @@ function renderKlantDash(el) {
         '<nav>' +
           '<div class="dash-menu-item active" onclick="klantTab(\'overzicht\',this)">Overzicht</div>' +
           '<div class="dash-menu-item" onclick="klantTab(\'boekingen\',this)">Mijn boekingen</div>' +
+          '<div class="dash-menu-item" onclick="klantTab(\'opdrachten\',this)">Opdrachten</div>' +
+          '<div class="dash-menu-item" onclick="klantTab(\'favorieten\',this)">Favorieten</div>' +
+          '<div class="dash-menu-item" onclick="klantTab(\'reviews\',this)">Mijn reviews</div>' +
           '<div class="dash-menu-item" onclick="klantTab(\'notificaties\',this)">Notificaties</div>' +
           '<div class="dash-menu-item" onclick="klantTab(\'account\',this)">Account</div>' +
         '</nav>' +
       '</aside>' +
       '<div class="dashboard-panel">' +
-        _klantOverzicht() + _klantBoekingen() + _klantNotifs() + _klantAccount() +
+        _klantOverzicht() + _klantBoekingen() + _klantOpdrachten() + _klantFavorieten() + _klantReviews() + _klantNotifs() + _klantAccount() +
       '</div>' +
     '</div>';
 
-  loadKlantBookings();
+  loadKlantOverzicht();
   loadKlantNotifications();
 }
 
@@ -919,7 +1365,10 @@ function klantTab(panel, el) {
   document.querySelectorAll('#dashboard-content .dash-panel').forEach(p => p.classList.add('hidden'));
   const target = document.getElementById('kl-p-' + panel);
   if (target) target.classList.remove('hidden');
-  if (panel === 'boekingen')    loadKlantBookings();
+  if (panel === 'boekingen')    loadKlantBookings('all');
+  if (panel === 'opdrachten')   loadKlantOpdrachten();
+  if (panel === 'favorieten')   loadKlantFavorieten();
+  if (panel === 'reviews')      loadKlantReviews();
   if (panel === 'notificaties') loadKlantNotifications();
 }
 window.klantTab = klantTab;
@@ -928,16 +1377,125 @@ function _klantOverzicht() {
   return '<div class="dash-panel" id="kl-p-overzicht">' +
     '<div class="dashboard-panel-title">Welkom, ' + esc(currentUser.name) + '</div>' +
     '<div class="dash-stat-row">' +
-      '<div class="dash-card">Buurt<br><strong>' + esc(currentUser.buurt || '-') + '</strong></div>' +
+      '<div class="dash-card kl-stat-card">Boekingen<br><strong id="kl-stat-total">—</strong></div>' +
+      '<div class="dash-card kl-stat-card">In afwachting<br><strong id="kl-stat-pending">—</strong></div>' +
+      '<div class="dash-card kl-stat-card">Geaccepteerd<br><strong id="kl-stat-accepted">—</strong></div>' +
+      '<div class="dash-card kl-stat-card">Favorieten<br><strong id="kl-stat-favs">—</strong></div>' +
     '</div>' +
+    '<div class="dashboard-panel-title" style="margin-top:22px;font-size:1rem">Recente activiteit</div>' +
+    '<div id="kl-recent"><p style="color:#aaa;font-size:.85rem">Laden...</p></div>' +
   '</div>';
+}
+
+async function loadKlantOverzicht() {
+  try {
+    const r = await fetch(API + '/my-bookings/' + currentUser.id);
+    const bookings = await r.json();
+
+    const total    = bookings.length;
+    const pending  = bookings.filter(b => b.status === 'pending').length;
+    const accepted = bookings.filter(b => b.status === 'accepted').length;
+    const favKey   = 'mkd_fav_' + currentUser.id;
+    const favCount = JSON.parse(localStorage.getItem(favKey) || '[]').length;
+
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    set('kl-stat-total',    total);
+    set('kl-stat-pending',  pending);
+    set('kl-stat-accepted', accepted);
+    set('kl-stat-favs',     favCount);
+
+    const recentEl = document.getElementById('kl-recent');
+    if (!recentEl) return;
+    if (!bookings.length) { recentEl.innerHTML = '<p style="color:#aaa;font-size:.85rem">Nog geen boekingen.</p>'; return; }
+    recentEl.innerHTML = bookings.slice(0, 5).map(b =>
+      '<div class="kl-recent-row">' +
+        '<div>' +
+          '<strong>' + esc(b.dienstverlener_name) + '</strong>' +
+          '<div style="font-size:.8rem;color:#888">' + b.date + (b.time ? ' om ' + b.time : '') + '</div>' +
+        '</div>' +
+        statusBadge(b.status) +
+      '</div>'
+    ).join('');
+  } catch {}
 }
 
 function _klantBoekingen() {
   return '<div class="dash-panel hidden" id="kl-p-boekingen">' +
     '<div class="dashboard-panel-title">Mijn boekingen</div>' +
+    '<div class="bk-filter-tabs">' +
+      '<button class="bk-filter active" onclick="klantBkFilter(\'all\',this)">Alle</button>' +
+      '<button class="bk-filter" onclick="klantBkFilter(\'pending\',this)">In afwachting</button>' +
+      '<button class="bk-filter" onclick="klantBkFilter(\'accepted\',this)">Geaccepteerd</button>' +
+      '<button class="bk-filter" onclick="klantBkFilter(\'declined\',this)">Afgewezen</button>' +
+    '</div>' +
     '<div id="kl-bk-list"><p>Laden...</p></div>' +
   '</div>';
+}
+
+function _klantFavorieten() {
+  return '<div class="dash-panel hidden" id="kl-p-favorieten">' +
+    '<div class="dashboard-panel-title">Favorieten</div>' +
+    '<div id="kl-fav-list"><p style="color:#aaa;font-size:.85rem">Laden...</p></div>' +
+  '</div>';
+}
+
+async function loadKlantFavorieten() {
+  const el = document.getElementById('kl-fav-list');
+  if (!el) return;
+  const favKey = 'mkd_fav_' + currentUser.id;
+  const favIds = JSON.parse(localStorage.getItem(favKey) || '[]');
+  if (!favIds.length) { el.innerHTML = '<p class="empty-plain">Nog geen favorieten opgeslagen.</p>'; return; }
+
+  try {
+    const r = await fetch(API + '/dienstverleners');
+    const all = await r.json();
+    const favs = all.filter(w => favIds.includes(String(w.id)) || favIds.includes(w.id));
+    if (!favs.length) { el.innerHTML = '<p class="empty-plain">Favorieten niet gevonden.</p>'; return; }
+    el.innerHTML = '<div style="display:flex;flex-direction:column;gap:12px">' +
+      favs.map(w =>
+        '<div class="booking-item" style="align-items:center">' +
+          '<div class="booking-info" style="display:flex;align-items:center;gap:12px">' +
+            '<div style="width:44px;height:44px;border-radius:50%;background:' + avatarColor(w.name) + ';display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:.9rem;flex-shrink:0">' + ini(w.name) + '</div>' +
+            '<div>' +
+              '<strong>' + esc(w.name) + '</strong>' +
+              '<div style="font-size:.8rem;color:#888">' + esc(w.category || '') + (w.buurt ? ' · ' + esc(w.buurt) : '') + '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div style="display:flex;gap:8px;flex-shrink:0">' +
+            '<button class="bk-rebook-btn" onclick="showProviderProfile(' + w.id + ')">Bekijken</button>' +
+            '<button class="bk-rebook-btn" onclick="openBookingModal(' + w.id + ',\'' + esc(w.name) + '\',\'' + esc(w.working_hours || '') + '\',' + (w.hourly_rate || 0) + ')">Boeken</button>' +
+          '</div>' +
+        '</div>'
+      ).join('') +
+    '</div>';
+  } catch { el.innerHTML = '<p>Fout bij laden favorieten.</p>'; }
+}
+
+function _klantReviews() {
+  return '<div class="dash-panel hidden" id="kl-p-reviews">' +
+    '<div class="dashboard-panel-title">Mijn reviews</div>' +
+    '<div id="kl-review-list"><p style="color:#aaa;font-size:.85rem">Laden...</p></div>' +
+  '</div>';
+}
+
+async function loadKlantReviews() {
+  const el = document.getElementById('kl-review-list');
+  if (!el) return;
+  try {
+    const r       = await fetch(API + '/my-reviews/' + currentUser.id);
+    const reviews = await r.json();
+    if (!reviews.length) { el.innerHTML = '<p class="empty-plain">Nog geen reviews geschreven.</p>'; return; }
+    el.innerHTML = reviews.map(rv =>
+      '<div class="review-item">' +
+        '<div class="review-header">' +
+          '<strong>' + esc(rv.provider_name) + '</strong>' +
+          '<span class="review-score">' + '★'.repeat(Math.round(rv.score / 2)) + '☆'.repeat(5 - Math.round(rv.score / 2)) + '</span>' +
+        '</div>' +
+        '<p style="color:#555;margin:4px 0 0">' + esc(rv.text) + '</p>' +
+        '<small style="color:#aaa">' + new Date(rv.created_at).toLocaleDateString('nl-NL') + '</small>' +
+      '</div>'
+    ).join('');
+  } catch { el.innerHTML = '<p>Fout bij laden reviews.</p>'; }
 }
 
 function _klantNotifs() {
@@ -947,9 +1505,174 @@ function _klantNotifs() {
   '</div>';
 }
 
+function _klantProfiel() {
+  return '<div class="dash-panel hidden" id="kl-p-profiel">' +
+    '<div class="dashboard-panel-title">Profiel bewerken</div>' +
+    '<div class="form-group">' +
+    '<label>Profielfoto</label>' +
+    '<div class="pfp-upload-wrap" onclick="document.getElementById(\'kl-avatar\').click()" title="Klik om foto te wijzigen">' +
+    (currentUser.profile_picture
+      ? '<img src="' + API + currentUser.profile_picture + '" class="pfp-upload-img">'
+      : '<div class="dash-avatar pfp-upload-img" style="font-size:1.8rem">' + ini(currentUser.name) + '</div>') +
+    '<div class="pfp-overlay">📷</div>' +
+    '</div>' +
+    '<div style="font-size:.75rem;color:#aaa;margin-top:8px">Klik op de foto om te wijzigen</div>' +
+    '<input type="file" id="kl-avatar" accept="image/*" style="display:none" onchange="uploadAvatarFor(\'kl\')">' +
+    '<div class="form-error" id="kl-avatar-msg"></div>' +
+    '</div>' +
+    '<div class="form-group"><label>Naam</label><input type="text" id="kl-name" value="' + esc(currentUser.name) + '"></div>' +
+    '<button class="btn-primary" onclick="saveKlantName()">Opslaan</button>' +
+    '<div class="form-error" id="kl-prof-msg"></div>' +
+  '</div>';
+}
+
+async function saveKlantName() {
+  const name  = document.getElementById('kl-name')?.value.trim();
+  const msgEl = document.getElementById('kl-prof-msg');
+  if (!name) { msgEl.textContent = 'Naam is verplicht.'; return; }
+  try {
+    const r = await fetch(API + '/update-name/' + currentUser.id, { method: 'PUT', headers: ct(), body: JSON.stringify({ name }) });
+    const data = await r.json();
+    if (!r.ok) { msgEl.textContent = data.error; return; }
+    currentUser.name = name;
+    localStorage.setItem('mkd_user', JSON.stringify(currentUser));
+    msgEl.style.color = 'green';
+    msgEl.textContent = 'Naam opgeslagen!';
+    if (document.getElementById('nav-username')) document.getElementById('nav-username').textContent = name;
+    if (document.getElementById('nav-avatar'))   document.getElementById('nav-avatar').textContent   = ini(name);
+  } catch { msgEl.textContent = 'Verbindingsfout.'; }
+}
+window.saveKlantName = saveKlantName;
+
+function _catOpts() {
+  return '<option value="">Kies categorie</option>' +
+    Object.keys(CAT_CSS).map(c => '<option value="' + esc(c) + '">' + esc(c) + '</option>').join('');
+}
+
+function _klantOpdrachten() {
+  return '<div class="dash-panel hidden" id="kl-p-opdrachten">' +
+    '<div class="dashboard-panel-title">Opdracht plaatsen</div>' +
+    '<div class="job-post-form">' +
+      '<div class="form-group"><label>Titel <span style="color:#e53e3e">*</span></label><input type="text" id="job-title" placeholder="bijv. Elektricien nodig voor installatie"></div>' +
+      '<div class="form-group"><label>Categorie <span style="color:#e53e3e">*</span></label><select id="job-cat">' + _catOpts() + '</select></div>' +
+      '<div class="form-group"><label>Omschrijving</label><textarea id="job-desc" rows="3" placeholder="Beschrijf wat je nodig hebt..."></textarea></div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+        '<div class="form-group"><label>Buurt</label><select id="job-buurt">' + distOpts('') + '</select></div>' +
+        '<div class="form-group"><label>Budget (optioneel)</label><input type="text" id="job-budget" placeholder="bijv. SRD 500"></div>' +
+      '</div>' +
+      '<div class="form-group"><label>Datum nodig</label><input type="date" id="job-date"></div>' +
+      '<div class="form-error" id="job-post-err"></div>' +
+      '<button class="btn-primary" onclick="postJob()">Opdracht plaatsen</button>' +
+    '</div>' +
+    '<div class="dashboard-panel-title" style="margin-top:28px;font-size:1rem">Mijn opdrachten</div>' +
+    '<div id="kl-job-list"><p style="color:#aaa;font-size:.85rem">Laden...</p></div>' +
+  '</div>';
+}
+
+async function postJob() {
+  const title    = document.getElementById('job-title')?.value.trim();
+  const category = document.getElementById('job-cat')?.value;
+  const desc     = document.getElementById('job-desc')?.value.trim();
+  const buurt    = document.getElementById('job-buurt')?.value;
+  const budget   = document.getElementById('job-budget')?.value.trim();
+  const date     = document.getElementById('job-date')?.value;
+  const errEl    = document.getElementById('job-post-err');
+  errEl.textContent = '';
+
+  if (!title)    { errEl.textContent = 'Titel is verplicht.'; return; }
+  if (!category) { errEl.textContent = 'Kies een categorie.'; return; }
+
+  try {
+    const r = await fetch(API + '/jobs', {
+      method: 'POST', headers: ct(),
+      body: JSON.stringify({ klant_id: currentUser.id, title, description: desc, category, buurt: buurt || null, budget: budget || null, date_needed: date || null }),
+    });
+    const data = await r.json();
+    if (!r.ok) { errEl.textContent = data.error; return; }
+    showToast('Opdracht geplaatst!', 'success');
+    document.getElementById('job-title').value = '';
+    document.getElementById('job-desc').value  = '';
+    document.getElementById('job-cat').value   = '';
+    document.getElementById('job-budget').value = '';
+    document.getElementById('job-date').value  = '';
+    loadKlantOpdrachten();
+  } catch { errEl.textContent = 'Verbindingsfout.'; }
+}
+window.postJob = postJob;
+
+async function loadKlantOpdrachten() {
+  const el = document.getElementById('kl-job-list');
+  if (!el) return;
+  try {
+    const r    = await fetch(API + '/jobs/mine/' + currentUser.id);
+    const jobs = await r.json();
+    if (!jobs.length) { el.innerHTML = '<p class="empty-plain">Nog geen opdrachten geplaatst.</p>'; return; }
+    el.innerHTML = jobs.map(j =>
+      '<div class="job-card">' +
+        '<div class="job-card-top">' +
+          '<div>' +
+            '<div class="job-title">' + esc(j.title) + '</div>' +
+            '<div class="job-meta">' + esc(j.category) + (j.buurt ? ' · ' + esc(j.buurt) : '') + (j.date_needed ? ' · ' + j.date_needed : '') + '</div>' +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:8px">' +
+            '<span class="job-status-badge ' + (j.status === 'open' ? 'job-open' : 'job-closed') + '">' + (j.status === 'open' ? 'Open' : 'Gesloten') + '</span>' +
+            (j.status === 'open' ? '<button class="bk-rebook-btn" onclick="closeJob(' + j.id + ')">Sluiten</button>' : '') +
+          '</div>' +
+        '</div>' +
+        (j.description ? '<div class="job-desc-text">' + esc(j.description) + '</div>' : '') +
+        '<div class="job-card-footer">' +
+          (j.budget ? '<span>💰 ' + esc(j.budget) + '</span>' : '') +
+          '<span style="cursor:pointer;color:#6c47ff;font-weight:600" onclick="viewJobResponses(' + j.id + ',this)">💬 ' + j.response_count + ' reactie' + (j.response_count !== 1 ? 's' : '') + '</span>' +
+        '</div>' +
+        '<div class="job-responses-wrap" id="jr-' + j.id + '" style="display:none"></div>' +
+      '</div>'
+    ).join('');
+  } catch { el.innerHTML = '<p>Fout bij laden opdrachten.</p>'; }
+}
+
+async function closeJob(jobId) {
+  if (!confirm('Opdracht sluiten?')) return;
+  try {
+    await fetch(API + '/jobs/' + jobId + '/close', { method: 'PUT', headers: ct() });
+    showToast('Opdracht gesloten.', 'info');
+    loadKlantOpdrachten();
+  } catch {}
+}
+window.closeJob = closeJob;
+
+async function viewJobResponses(jobId, btn) {
+  const wrap = document.getElementById('jr-' + jobId);
+  if (!wrap) return;
+  if (wrap.style.display !== 'none') { wrap.style.display = 'none'; return; }
+  wrap.innerHTML = '<p style="color:#aaa;font-size:.82rem;padding:8px 0">Laden...</p>';
+  wrap.style.display = '';
+  try {
+    const r    = await fetch(API + '/job-responses/' + jobId);
+    const resp = await r.json();
+    if (!resp.length) { wrap.innerHTML = '<p class="empty-plain" style="font-size:.82rem">Nog geen reacties.</p>'; return; }
+    wrap.innerHTML = '<div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">' +
+      resp.map(rv =>
+        '<div class="job-response-item">' +
+          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' +
+            '<div style="width:32px;height:32px;border-radius:50%;background:' + avatarColor(rv.dv_name) + ';display:flex;align-items:center;justify-content:center;color:#fff;font-size:.75rem;font-weight:700;flex-shrink:0">' + ini(rv.dv_name) + '</div>' +
+            '<div><strong>' + esc(rv.dv_name) + '</strong>' + (rv.hourly_rate ? '<span style="color:#6c47ff;font-size:.78rem;margin-left:6px">SRD ' + rv.hourly_rate + '/u</span>' : '') + '</div>' +
+          '</div>' +
+          (rv.message ? '<div style="font-size:.82rem;color:#555">' + esc(rv.message) + '</div>' : '') +
+          '<div style="margin-top:6px;display:flex;gap:6px">' +
+            '<button class="bk-rebook-btn" onclick="showProviderProfile(' + rv.dienstverlener_id + ')">Profiel bekijken</button>' +
+            '<button class="bk-rebook-btn" onclick="openBookingModal(' + rv.dienstverlener_id + ',\'' + esc(rv.dv_name) + '\')">Boeken</button>' +
+          '</div>' +
+        '</div>'
+      ).join('') +
+    '</div>';
+  } catch { wrap.innerHTML = '<p>Fout bij laden reacties.</p>'; }
+}
+window.viewJobResponses = viewJobResponses;
+
 function _klantAccount() {
   return '<div class="dash-panel hidden" id="kl-p-account">' +
     '<div class="dashboard-panel-title">Account instellingen</div>' +
+    _darkModeCard() +
     '<div class="form-group"><label>Nieuw e-mailadres</label><input type="email" id="kl-new-email" placeholder="' + esc(currentUser.email) + '"></div>' +
     '<div class="form-group"><label>Buurt</label><select id="kl-buurt">' + distOpts(currentUser.buurt) + '</select></div>' +
     '<div class="form-group"><label>Huidig wachtwoord</label><input type="password" id="kl-cur-pw"></div>' +
@@ -1008,27 +1731,64 @@ async function respondBooking(bookingId, status, klantId) {
 }
 window.respondBooking = respondBooking;
 
-async function loadKlantBookings() {
+let _klantBkCache = [];
+
+function klantBkFilter(filter, btn) {
+  document.querySelectorAll('.bk-filter').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  _renderKlantBkList(filter);
+}
+window.klantBkFilter = klantBkFilter;
+
+function _renderKlantBkList(filter) {
+  const el = document.getElementById('kl-bk-list');
+  if (!el) return;
+  const bookings = filter === 'all' ? _klantBkCache : _klantBkCache.filter(b => b.status === filter);
+  if (!bookings.length) { el.innerHTML = '<p class="empty-plain">Geen boekingen gevonden.</p>'; return; }
+  el.innerHTML = bookings.map(b =>
+    '<div class="booking-item">' +
+      '<div class="booking-info">' +
+        '<strong>' + esc(b.dienstverlener_name) + '</strong>' +
+        '<div>' + b.date + (b.time ? ' om ' + b.time : '') + (b.duration_minutes ? ' · ' + fmtDur(b.duration_minutes) : '') + '</div>' +
+        (b.message ? '<div class="booking-msg">"' + esc(b.message) + '"</div>' : '') +
+      '</div>' +
+      '<div class="booking-right">' +
+        statusBadge(b.status) +
+        '<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">' +
+          (b.status === 'pending'
+            ? '<button class="btn-no" style="font-size:.75rem;padding:4px 10px" onclick="cancelKlantBooking(' + b.id + ',' + b.dienstverlener_id + ')">Annuleren</button>'
+            : '') +
+          '<button class="bk-rebook-btn" onclick="openBookingModal(' + b.dienstverlener_id + ',\'' + esc(b.dienstverlener_name) + '\')">Opnieuw boeken</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>'
+  ).join('');
+}
+
+async function loadKlantBookings(filter) {
   const el = document.getElementById('kl-bk-list');
   if (!el) return;
   try {
     const r = await fetch(API + '/my-bookings/' + currentUser.id);
-    const bookings = await r.json();
-
-    if (!bookings.length) { el.innerHTML = '<p class="empty-plain">Geen boekingen.</p>'; return; }
-
-    el.innerHTML = bookings.map(b =>
-      '<div class="booking-item">' +
-        '<div class="booking-info">' +
-          '<strong>' + esc(b.dienstverlener_name) + '</strong>' +
-          '<div>' + b.date + (b.time ? ' om ' + b.time : '') + '</div>' +
-          (b.message ? '<div class="booking-msg">"' + esc(b.message) + '"</div>' : '') +
-        '</div>' +
-        '<div class="booking-right">' + statusBadge(b.status) + '</div>' +
-      '</div>'
-    ).join('');
+    _klantBkCache = await r.json();
+    _renderKlantBkList(filter || 'all');
   } catch { el.innerHTML = '<p>Fout bij laden boekingen.</p>'; }
 }
+
+async function cancelKlantBooking(bookingId, dvId) {
+  if (!confirm('Boeking annuleren?')) return;
+  try {
+    const r = await fetch(API + '/bookings/' + bookingId, {
+      method: 'PUT', headers: ct(),
+      body: JSON.stringify({ status: 'cancelled', dienstverlener_id: dvId, klant_name: currentUser.name }),
+    });
+    if (!r.ok) throw new Error();
+    showToast('Boeking geannuleerd.', 'info');
+    loadKlantBookings('all');
+    loadKlantOverzicht();
+  } catch { showToast('Fout bij annuleren.', 'error'); }
+}
+window.cancelKlantBooking = cancelKlantBooking;
 
 // ─────────────────────────────────────────
 // NOTIFICATIONS (dashboard)
@@ -1119,7 +1879,7 @@ async function saveProfile() {
   const hourly_rate   = document.getElementById('dv-rate').value;
   const buurt         = document.getElementById('dv-buurt').value;
   const phone         = document.getElementById('dv-phone').value.trim();
-  const working_hours = document.getElementById('dv-hours').value.trim();
+  const working_hours = _schedPickerVal('dv');
   const msgEl         = document.getElementById('dv-prof-msg');
 
   try {
@@ -1140,26 +1900,74 @@ async function saveProfile() {
 }
 window.saveProfile = saveProfile;
 
-async function uploadAvatar() {
-  const file  = document.getElementById('dv-avatar')?.files[0];
-  const msgEl = document.getElementById('dv-avatar-msg');
-  if (!file) { msgEl.textContent = 'Kies eerst een afbeelding.'; return; }
+async function uploadAvatarFor(prefix) {
+  const file  = document.getElementById(prefix + '-avatar')?.files[0];
+  const msgEl = document.getElementById(prefix + '-avatar-msg');
+  if (!file) { if (msgEl) msgEl.textContent = 'Kies eerst een afbeelding.'; return; }
   const form = new FormData();
   form.append('avatar', file);
   try {
     const r = await fetch(API + '/upload/avatar/' + currentUser.id, { method: 'POST', body: form });
     const data = await r.json();
-    if (!r.ok) { msgEl.textContent = data.error; return; }
+    if (!r.ok) { if (msgEl) msgEl.textContent = data.error; return; }
     currentUser.profile_picture = data.url;
     localStorage.setItem('mkd_user', JSON.stringify(currentUser));
-    msgEl.style.color = 'green';
-    msgEl.textContent = 'Foto opgeslagen!';
+    if (msgEl) { msgEl.style.color = 'green'; msgEl.textContent = 'Foto opgeslagen!'; }
     const navAv = document.getElementById('nav-avatar');
-    if (navAv) { navAv.outerHTML = '<img id="nav-avatar" src="' + API + data.url + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover">'; }
+    if (navAv) navAv.outerHTML = '<img id="nav-avatar" src="' + API + data.url + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover">';
     renderDashboard();
-  } catch { msgEl.textContent = 'Verbindingsfout.'; }
+  } catch { if (msgEl) msgEl.textContent = 'Verbindingsfout.'; }
 }
+window.uploadAvatarFor = uploadAvatarFor;
+
+async function uploadAvatar() { await uploadAvatarFor('dv'); }
 window.uploadAvatar = uploadAvatar;
+
+function _darkModeCard() {
+  const isDark = document.body.classList.contains('dark-mode');
+  return '<div class="dark-mode-card">' +
+    '<div class="avail-toggle-info">' +
+      '<span style="font-size:1.3rem">' + (isDark ? '☀️' : '🌙') + '</span>' +
+      '<div><strong>Nachtmodus</strong><div style="font-size:.8rem;color:#888">Donker kleurenschema</div></div>' +
+    '</div>' +
+    '<label class="avail-switch">' +
+      '<input type="checkbox"' + (isDark ? ' checked' : '') + ' onchange="toggleDarkMode()">' +
+      '<span class="avail-slider"></span>' +
+    '</label>' +
+  '</div>';
+}
+
+function toggleDarkMode() {
+  const isDark = document.body.classList.toggle('dark-mode');
+  localStorage.setItem('mkd_dark', isDark ? '1' : '0');
+  const icon  = document.getElementById('dark-mode-icon');
+  const label = document.getElementById('dark-mode-label');
+  if (icon)  icon.textContent  = isDark ? '☀️' : '🌙';
+  if (label) label.textContent = isDark ? 'Lichte modus' : 'Nachtmodus';
+}
+window.toggleDarkMode = toggleDarkMode;
+
+async function toggleAvailability(isAvail) {
+  if (!currentUser) return;
+  try {
+    await fetch(API + '/availability/' + currentUser.id, {
+      method: 'PUT', headers: ct(),
+      body: JSON.stringify({ is_available: isAvail }),
+    });
+    currentUser.is_available = isAvail ? 1 : 0;
+    localStorage.setItem('mkd_user', JSON.stringify(currentUser));
+    const dot = document.querySelector('.avail-toggle-dot');
+    const lbl = document.querySelector('.avail-toggle-info strong');
+    const sub = document.querySelector('.avail-toggle-info div > div');
+    if (dot) dot.classList.toggle('busy', !isAvail);
+    if (lbl) lbl.textContent = isAvail ? 'Beschikbaar' : 'Bezet';
+    if (sub) sub.textContent = 'Klanten kunnen ' + (isAvail ? '' : 'geen ') + 'boeking aanvragen';
+    showToast(isAvail ? 'Je bent nu beschikbaar.' : 'Je staat op bezet.', 'info');
+  } catch {
+    showToast('Fout bij bijwerken.', 'error');
+  }
+}
+window.toggleAvailability = toggleAvailability;
 
 function saveAccountDV() {
   _saveAccount(
@@ -1244,6 +2052,181 @@ function setupReveal() {
 // ─────────────────────────────────────────
 // INJECT DASHBOARD CSS
 // ─────────────────────────────────────────
+// CHAT
+// ─────────────────────────────────────────
+
+function openChat(userId, name, avatar) {
+  if (!currentUser) { openAuthModal('login'); return; }
+  _renderChatView();
+  showView('chat');
+  if (userId) selectConversation(userId, name, avatar);
+}
+window.openChat = openChat;
+
+function closeChat() {
+  if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
+  activeChatUid = null;
+}
+
+function _renderChatView() {
+  const el = document.getElementById('view-chat');
+  if (!el) return;
+  el.innerHTML =
+    '<div class="cv-layout">' +
+      '<div class="cv-sidebar">' +
+        '<div class="cv-sidebar-header">' +
+          '<button class="cv-back-btn" onclick="showView(\'home\')">&#8592; Terug</button>' +
+          '<div style="font-size:1.15rem;font-weight:700;margin-top:10px">💬 Berichten</div>' +
+        '</div>' +
+        '<div id="cv-convos"><div class="chat-empty" style="padding:24px;font-size:.85rem">Laden...</div></div>' +
+      '</div>' +
+      '<div class="cv-main" id="cv-main">' +
+        '<div class="chat-empty" style="flex-direction:column;gap:8px">' +
+          '<span style="font-size:2.5rem">💬</span>' +
+          '<span>Kies een gesprek om te starten</span>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  loadConversations();
+}
+
+async function loadConversations() {
+  if (!currentUser) return;
+  const el = document.getElementById('cv-convos');
+  if (!el) return;
+  try {
+    const r = await fetch(API + '/conversations/' + currentUser.id);
+    const convos = await r.json();
+    if (!convos.length) {
+      el.innerHTML = '<div class="chat-empty" style="padding:24px;font-size:.85rem;flex-direction:column;gap:4px"><span style="font-size:1.8rem">📭</span><span>Nog geen gesprekken</span></div>';
+      return;
+    }
+    el.innerHTML = convos.map(c =>
+      '<div class="chat-convo-item' + (activeChatUid == c.id ? ' active' : '') + '" data-uid="' + c.id + '" onclick="selectConversation(' + c.id + ',\'' + esc(c.name) + '\',\'' + esc(c.profile_picture || '') + '\')">' +
+        '<div class="chat-convo-avatar" style="background:' + avatarColor(c.name) + '">' +
+          (c.profile_picture ? '<img src="' + API + c.profile_picture + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover">' : ini(c.name)) +
+        '</div>' +
+        '<div class="chat-convo-info">' +
+          '<div class="chat-convo-name">' + esc(c.name) + '</div>' +
+          '<div class="chat-convo-last">' + esc(c.last_message || '') + '</div>' +
+        '</div>' +
+        (c.unread_count > 0 ? '<div class="chat-convo-badge">' + c.unread_count + '</div>' : '') +
+      '</div>'
+    ).join('');
+  } catch { el.innerHTML = '<div class="chat-empty">Kon gesprekken niet laden.</div>'; }
+}
+
+async function selectConversation(userId, name, avatar) {
+  activeChatUid = userId;
+  const mainEl = document.getElementById('cv-main');
+  if (!mainEl) return;
+
+  document.querySelectorAll('.chat-convo-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.uid == userId);
+  });
+
+  mainEl.innerHTML =
+    '<div class="cv-active-header">' +
+      '<div class="chat-convo-avatar" style="background:' + avatarColor(name) + ';width:38px;height:38px;font-size:.88rem;flex-shrink:0">' +
+        (avatar ? '<img src="' + API + avatar + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover">' : ini(name)) +
+      '</div>' +
+      '<div><div style="font-weight:700">' + esc(name) + '</div></div>' +
+    '</div>' +
+    '<div class="cv-messages" id="chat-messages"></div>' +
+    '<div class="cv-input-row">' +
+      '<input type="text" class="cv-input" id="chat-input" placeholder="Schrijf een bericht..." onkeydown="if(event.key===\'Enter\')sendChatMessage()">' +
+      '<button class="cv-send-btn" onclick="sendChatMessage()">Stuur →</button>' +
+    '</div>';
+
+  await loadChatMessages(userId);
+  fetch(API + '/messages/read', { method: 'PUT', headers: ct(), body: JSON.stringify({ reader_id: currentUser.id, sender_id: userId }) });
+  loadConversations();
+
+  if (chatPollTimer) clearInterval(chatPollTimer);
+  chatPollTimer = setInterval(() => loadChatMessages(userId, true), 4000);
+}
+window.selectConversation = selectConversation;
+
+async function loadChatMessages(withUserId, silent = false) {
+  const container = document.getElementById('chat-messages');
+  if (!container) return;
+  try {
+    const r = await fetch(API + '/messages/' + currentUser.id + '/' + withUserId);
+    const msgs = await r.json();
+    const atBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 60;
+    container.innerHTML = msgs.length
+      ? msgs.map(m => {
+          const mine = m.sender_id == currentUser.id;
+          const time = new Date(m.created_at).toLocaleTimeString('nl', { hour: '2-digit', minute: '2-digit' });
+          return '<div class="chat-msg ' + (mine ? 'mine' : 'theirs') + '">' +
+            esc(m.message) +
+            '<div class="chat-msg-time">' + time + '</div>' +
+          '</div>';
+        }).join('')
+      : '<div class="chat-empty" style="font-size:.83rem">Stuur het eerste bericht!</div>';
+    if (!silent || atBottom) container.scrollTop = container.scrollHeight;
+  } catch { /* silent */ }
+}
+
+async function sendChatMessage() {
+  if (!currentUser || !activeChatUid) return;
+  const input = document.getElementById('chat-input');
+  const msg = input?.value.trim();
+  if (!msg) return;
+  input.value = '';
+  try {
+    const r = await fetch(API + '/messages', {
+      method: 'POST', headers: ct(),
+      body: JSON.stringify({ sender_id: currentUser.id, receiver_id: activeChatUid, message: msg }),
+    });
+    const data = await r.json();
+    if (data.dnd) {
+      showToast('Deze gebruiker heeft Niet Storen ingeschakeld.', 'info');
+      input.value = msg;
+      return;
+    }
+    await loadChatMessages(activeChatUid);
+    loadConversations();
+  } catch { showToast('Fout bij verzenden.', 'error'); }
+}
+window.sendChatMessage = sendChatMessage;
+
+async function toggleDND(isOn) {
+  if (!currentUser) return;
+  try {
+    await fetch(API + '/dnd/' + currentUser.id, {
+      method: 'PUT', headers: ct(),
+      body: JSON.stringify({ dnd_mode: isOn }),
+    });
+    currentUser.dnd_mode = isOn ? 1 : 0;
+    localStorage.setItem('mkd_user', JSON.stringify(currentUser));
+    const dot = document.querySelector('#dv-p-overzicht .avail-toggle-card:last-of-type .avail-toggle-dot');
+    const lbl = document.querySelector('#dnd-check')?.closest('.avail-toggle-card')?.querySelector('strong');
+    const slider = document.querySelector('#dnd-check ~ .avail-slider');
+    if (dot) dot.classList.toggle('busy', isOn);
+    if (lbl) lbl.textContent = 'Niet Storen ' + (isOn ? '(aan)' : '(uit)');
+    if (slider) slider.style.background = isOn ? '#ef4444' : '#ccc';
+    showToast(isOn ? 'Niet Storen ingeschakeld.' : 'Niet Storen uitgeschakeld.', 'info');
+  } catch { showToast('Fout bij bijwerken.', 'error'); }
+}
+window.toggleDND = toggleDND;
+
+async function pollMsgCount() {
+  if (!currentUser) return;
+  try {
+    const r = await fetch(API + '/messages/unread/' + currentUser.id);
+    const { count } = await r.json();
+    const navBadge  = document.getElementById('chat-nav-badge');
+    const dashBadge = document.getElementById('dash-chat-badge');
+    [navBadge, dashBadge].forEach(b => {
+      if (!b) return;
+      b.textContent = count;
+      b.style.display = count === 0 ? 'none' : 'inline';
+    });
+  } catch { /* silent */ }
+}
+
+// ─────────────────────────────────────────
 
 function injectDashCSS() {
   const s = document.createElement('style');
@@ -1290,8 +2273,281 @@ function injectDashCSS() {
     '@media(max-width:768px){.dashboard-grid{grid-template-columns:1fr}}',
     '.meta-score{background:#fff8e1;color:#b7791f;border-radius:20px;padding:2px 8px;font-size:.8rem;font-weight:600}',
     '.cat-icon{font-size:2rem;margin-bottom:8px}',
-    '.btn-fav{font-size:1.1rem;background:none;border:none;cursor:pointer;padding:4px 8px;color:#e53e3e}',
+    '.btn-fav{font-size:1.1rem;background:rgba(0,0,0,.25);border:none;cursor:pointer;padding:4px 8px;color:#fff;border-radius:50%;line-height:1;opacity:1!important}',
     '.dash-avatar-img{width:56px;height:56px;border-radius:50%;object-fit:cover;margin:0 auto 8px;display:block}',
+    // Card redesign
+    '.pcard-avatar-section{display:flex;flex-direction:column;align-items:center;padding:4px 0 6px}',
+    '.pcard-score-badge{display:flex;align-items:center;gap:4px;margin-top:5px}',
+    '.pcard-score-num{background:rgba(34,197,94,.12);color:#15803d;border:1.5px solid #22c55e;border-radius:20px;padding:1px 9px;font-size:.8rem;font-weight:700}',
+    '.pcard-review-cnt{font-size:.75rem;color:var(--text-muted)}',
+    '.top10-section .pcard-review-cnt{color:rgba(255,255,255,.5)}',
+    '.pcard-chip-dist{background:rgba(236,72,153,.1);color:#be185d}',
+    '.pcard-chip-cat{background:rgba(245,158,11,.1);color:#b45309}',
+    '.top10-section .pcard-chip-dist{background:rgba(236,72,153,.2);color:#f9a8d4}',
+    '.top10-section .pcard-chip-cat{background:rgba(245,158,11,.2);color:#fde68a}',
+    '.avail-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;vertical-align:middle}',
+    '.avail-dot.busy{background:#ef4444}',
+    // Profile page 2-column layout
+    '.prof-layout{max-width:1100px;margin:0 auto;padding:28px 16px}',
+    '.prof-columns{display:grid;grid-template-columns:1fr 320px;gap:18px;align-items:start;margin-top:18px}',
+    '@media(max-width:900px){.prof-columns{grid-template-columns:1fr}}',
+    '.prof-card{background:#fff;border-radius:14px;padding:22px;box-shadow:0 2px 12px rgba(0,0,0,.07);margin-bottom:14px}',
+    '.prof-header-card{display:flex;gap:18px;align-items:flex-start}',
+    '.prof-avatar-col{display:flex;flex-direction:column;align-items:center;gap:8px;flex-shrink:0}',
+    '.prof-avatar-img{width:84px;height:84px;border-radius:50%;object-fit:cover}',
+    '.prof-avatar-circle{width:84px;height:84px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.9rem;font-weight:700;color:#fff}',
+    '.prof-avail-badge{font-size:.72rem;padding:3px 10px;border-radius:20px;background:#dcfce7;color:#166534;font-weight:600;white-space:nowrap}',
+    '.prof-avail-badge.busy{background:#fee2e2;color:#991b1b}',
+    '.prof-header-info{flex:1}',
+    '.prof-name{margin:0 0 4px;font-size:1.35rem;font-weight:700}',
+    '.prof-exp{color:#666;font-size:.88rem;margin:0 0 12px}',
+    '.prof-header-actions{display:flex;gap:8px;flex-wrap:wrap}',
+    '.prof-section-title{font-size:1rem;font-weight:700;margin-bottom:12px}',
+    '.trust-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}',
+    '.trust-stat-box{background:#f8f7ff;border-radius:10px;padding:12px;text-align:center}',
+    '.ts-icon{font-size:1.3rem;margin-bottom:3px}',
+    '.ts-num{font-size:1.35rem;font-weight:700;color:#1a1a2e}',
+    '.ts-label{font-size:.7rem;color:#888;margin-top:2px}',
+    '.trust-bars{display:flex;flex-direction:column;gap:9px;margin-bottom:12px}',
+    '.trust-bar-row{display:flex;align-items:center;gap:8px;font-size:.82rem}',
+    '.trust-bar-row>span:first-child{min-width:155px;color:#555}',
+    '.trust-bar{flex:1;height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden}',
+    '.trust-bar-fill{height:100%;background:#22c55e;border-radius:4px;transition:width .5s}',
+    '.trust-bar-fill.tb-blue{background:#3b82f6}',
+    '.trust-bar-row>span:last-child{min-width:34px;text-align:right;font-weight:600;font-size:.8rem}',
+    '.trust-hours{display:inline-flex;align-items:center;gap:6px;background:#f0fdf4;color:#166534;border-radius:20px;padding:5px 13px;font-size:.82rem}',
+    '.vaardigheden-tags{display:flex;flex-wrap:wrap;gap:8px}',
+    '.vaard-tag{background:#f3f0ff;color:#6c47ff;border-radius:20px;padding:4px 13px;font-size:.82rem;font-weight:500}',
+    '.dienst-info-table{width:100%;border-collapse:collapse}',
+    '.dienst-info-table td{padding:7px 0;border-bottom:1px solid #f3f3f3;font-size:.87rem;vertical-align:middle}',
+    '.dienst-info-table td:first-child{color:#888}',
+    '.di-val{font-weight:600;text-align:right}',
+    '.di-green{color:#16a34a}',
+    '.dienst-price-box{background:#fef3c7;border-radius:10px;padding:14px;text-align:center;margin-top:12px}',
+    '.dienst-price{font-size:1.3rem;font-weight:700;color:#d97706}',
+    '.dienst-price-label{font-size:.77rem;color:#92400e;margin-top:2px}',
+    '.btn-stuur-bericht{display:block;width:100%;background:#c07f1a;color:#fff;border:none;border-radius:8px;padding:11px;font-size:.9rem;font-weight:600;cursor:pointer;text-align:center;text-decoration:none;margin-top:10px;box-sizing:border-box}',
+    '.btn-stuur-bericht:hover{background:#a0691a}',
+    '.review-item{padding:13px 0;border-bottom:1px solid #f3f3f3}',
+    '.review-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}',
+    '.review-score{color:#f59e0b;font-size:1rem;letter-spacing:1px}',
+    // Star rating picker
+    '.star-rating{display:flex;gap:6px;margin:6px 0 2px;cursor:pointer}',
+    '.star{font-size:2rem;color:#d5d0c8;transition:color .1s;user-select:none;line-height:1}',
+    '.star.active{color:#f59e0b}',
+    '.star.hover{color:#fbbf24}',
+    // Profile photo upload
+    '.pfp-upload-wrap{position:relative;display:inline-block;cursor:pointer;border-radius:50%;overflow:hidden;width:88px;height:88px}',
+    '.pfp-upload-img{width:88px;height:88px;border-radius:50%;object-fit:cover;display:flex;align-items:center;justify-content:center;font-size:1.8rem}',
+    '.pfp-overlay{position:absolute;inset:0;background:rgba(0,0,0,0);display:flex;align-items:center;justify-content:center;font-size:1.5rem;opacity:0;transition:background .2s,opacity .2s}',
+    '.pfp-upload-wrap:hover .pfp-overlay{background:rgba(0,0,0,.45);opacity:1}',
+    // Availability toggle in dashboard
+    '.avail-toggle-card{display:flex;align-items:center;justify-content:space-between;background:#f0fdf4;border-radius:10px;padding:14px 16px;margin-bottom:16px;gap:12px}',
+    '.avail-toggle-info{display:flex;align-items:center;gap:12px}',
+    '.avail-toggle-dot{width:11px;height:11px;border-radius:50%;background:#22c55e;flex-shrink:0}',
+    '.avail-toggle-dot.busy{background:#ef4444}',
+    '.avail-switch{position:relative;width:44px;height:24px;display:inline-block;flex-shrink:0}',
+    '.avail-switch input{opacity:0;width:0;height:0;position:absolute}',
+    '.avail-slider{position:absolute;inset:0;background:#ccc;border-radius:24px;cursor:pointer;transition:.25s}',
+    '.avail-slider::before{content:"";position:absolute;width:18px;height:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.25s}',
+    '.avail-switch input:checked~.avail-slider{background:#22c55e}',
+    '.avail-switch input:checked~.avail-slider::before{transform:translateX(20px)}',
+    '#dnd-check:checked~.avail-slider{background:#ef4444}',
+    // Dark mode card
+    '.dark-mode-card{display:flex;align-items:center;justify-content:space-between;background:#f0f0ff;border-radius:10px;padding:14px 16px;margin-bottom:20px;gap:12px}',
+    'body.dark-mode .dark-mode-card{background:#1e1e32}',
+    // ── DARK MODE ──────────────────────────────────────────
+    'body.dark-mode{--bg:#0f0f1a;--surface:#1a1a2e;--primary:#0d0d1f;--text:#dddde8;--text-muted:#8888a0;background:#0f0f1a;color:#dddde8}',
+    'body.dark-mode #navbar{background:#0d0d1f!important;border-bottom:1px solid #1e1e32}',
+    'body.dark-mode .nav-link{color:#c0c0d8!important}',
+    'body.dark-mode .nav-logo-img{filter:brightness(.9)}',
+    'body.dark-mode .user-pill{background:#1a1a2e!important;color:#dddde8!important}',
+    'body.dark-mode .user-dropdown{background:#1a1a2e!important;border:1px solid #2a2a40!important}',
+    'body.dark-mode .user-dropdown a{color:#dddde8!important}',
+    'body.dark-mode .user-dropdown a:hover{background:#252540!important}',
+    'body.dark-mode .hero{background:#0d0d1f!important}',
+    'body.dark-mode .hero-title,body.dark-mode .hero-subtitle{color:#dddde8!important}',
+    'body.dark-mode .provider-card{background:rgba(255,255,255,.08)!important;border-color:rgba(255,255,255,.15)!important;backdrop-filter:blur(12px)!important;-webkit-backdrop-filter:blur(12px)!important}',
+    'body.dark-mode .provider-name,body.dark-mode .provider-price{color:#dddde8!important}',
+    'body.dark-mode .provider-tagline{color:#8888a0!important}',
+    'body.dark-mode .dash-card{background:#1a1a2e!important;color:#dddde8!important}',
+    'body.dark-mode .dashboard-panel{background:#1a1a2e!important;color:#dddde8!important}',
+    'body.dark-mode .dashboard-grid{background:#0f0f1a!important}',
+    'body.dark-mode .prof-card{background:#1a1a2e!important;color:#dddde8!important}',
+    'body.dark-mode .prof-section-title{color:#dddde8!important}',
+    'body.dark-mode .trust-stat-box{background:#111128!important}',
+    'body.dark-mode .ts-num{color:#dddde8!important}',
+    'body.dark-mode .dienst-info-table td{border-color:#2a2a40!important;color:#dddde8!important}',
+    'body.dark-mode .dienst-info-table td:first-child{color:#8888a0!important}',
+    'body.dark-mode .profile-back{color:#a0a0c0!important}',
+    'body.dark-mode input,body.dark-mode textarea,body.dark-mode select{background:#1e1e32!important;color:#dddde8!important;border-color:#3a3a55!important}',
+    'body.dark-mode input:focus,body.dark-mode textarea:focus,body.dark-mode select:focus{background:#1e1e32!important;border-color:#6c47ff!important;box-shadow:0 0 0 3px rgba(108,71,255,.2)!important}',
+    'body.dark-mode input::placeholder,body.dark-mode textarea::placeholder{color:#6060a0!important}',
+    'body.dark-mode input:-webkit-autofill,body.dark-mode input:-webkit-autofill:hover,body.dark-mode input:-webkit-autofill:focus{-webkit-box-shadow:0 0 0 1000px #1e1e32 inset!important;-webkit-text-fill-color:#dddde8!important;caret-color:#dddde8!important}',
+    'body.dark-mode .modal{background:#1a1a2e!important;color:#dddde8!important}',
+    'body.dark-mode .form-group label{color:#c0c0d8!important}',
+    'body.dark-mode .booking-item{border-color:#2a2a40!important}',
+    'body.dark-mode .notif-item{border-color:#2a2a40!important}',
+    'body.dark-mode .avail-toggle-card{background:#0d2818!important}',
+    'body.dark-mode .dnd-toggle-card{background:#2a1010!important;border-color:#4a2020!important}',
+    'body.dark-mode .cv-sidebar{background:#111126!important}',
+    'body.dark-mode .cv-sidebar-header{background:#0d0d1f!important;border-color:#2a2a3e!important}',
+    'body.dark-mode .cv-main,body.dark-mode #view-chat.active{background:#0f0f1a!important}',
+    'body.dark-mode .cv-active-header,body.dark-mode .cv-input-row{background:#111126!important;border-color:#2a2a3e!important}',
+    'body.dark-mode .chat-convo-item{border-color:#2a2a3e!important;color:#dddde8!important}',
+    'body.dark-mode .chat-convo-item:hover{background:#1a1a2e!important}',
+    'body.dark-mode .chat-convo-item.active{background:#22224a!important}',
+    'body.dark-mode .chat-convo-last{color:#7070a0!important}',
+    'body.dark-mode .chat-msg.theirs{background:#1e1e32!important;color:#dddde8!important}',
+    'body.dark-mode .cv-input{background:#1e1e32!important;border-color:#3a3a55!important;color:#dddde8!important}',
+    'body.dark-mode .vaard-tag{background:#1e1e3a!important;color:#a0a0ff!important}',
+    'body.dark-mode .prof-avail-badge{background:#0d2818!important;color:#4ade80!important}',
+    'body.dark-mode .hero-search-box,body.dark-mode .search-input-wrap{background:#1a1a2e!important}',
+    'body.dark-mode .browse-section,body.dark-mode .browse-header{background:#0f0f1a!important}',
+    'body.dark-mode .category-card{background:#1a1a2e!important;color:#dddde8!important}',
+    'body.dark-mode .footer{background:#0d0d1f!important}',
+    // Hardcoded-background elements that CSS variables can't reach
+    'body.dark-mode .hero-card{background:rgba(20,20,38,.92)!important;box-shadow:0 4px 24px rgba(0,0,0,.5)!important}',
+    'body.dark-mode .hc-info strong{color:#dddde8!important}',
+    'body.dark-mode .hc-info small{color:#8888a0!important}',
+    'body.dark-mode .hero-search-box{background:#1a1a2e!important;border-color:#2a2a40!important}',
+    'body.dark-mode .search-input-wrap input{background:#1a1a2e!important;color:#dddde8!important}',
+    'body.dark-mode .search-input-wrap input::placeholder{color:#6060a0!important}',
+    'body.dark-mode #hero-district{background:#1a1a2e!important;color:#dddde8!important;border-color:#2a2a40!important}',
+    'body.dark-mode .modal{background:#1a1a2e!important;color:#dddde8!important}',
+    'body.dark-mode .modal h3,body.dark-mode .modal label,body.dark-mode .modal p{color:#dddde8!important}',
+    'body.dark-mode .auth-tabs{background:#111128!important}',
+    'body.dark-mode .tab-btn{color:#8888a0!important}',
+    'body.dark-mode .tab-btn.active{color:#dddde8!important;border-color:#6c47ff!important}',
+    'body.dark-mode .category-card{background:#1a1a2e!important;color:#dddde8!important}',
+    'body.dark-mode .section-title{color:#dddde8!important}',
+    'body.dark-mode .section-sub{color:#8888a0!important}',
+    'body.dark-mode .cta-section,body.dark-mode .cta-box{background:#0d0d1f!important}',
+    'body.dark-mode .cta-num-item strong{color:#dddde8!important}',
+    'body.dark-mode .cta-num-item span{color:#8888a0!important}',
+    'body.dark-mode .filter-bar,body.dark-mode .browse-filters{background:#111126!important}',
+    'body.dark-mode .filter-bar select,body.dark-mode .browse-filters input{background:#1a1a2e!important;color:#dddde8!important;border-color:#2a2a40!important}',
+    'body.dark-mode .review-overlay,body.dark-mode #review-overlay{background:rgba(0,0,0,.7)!important}',
+    'body.dark-mode #review-modal{background:#1a1a2e!important;color:#dddde8!important}',
+    'body.dark-mode .dash-menu-item{color:#c0c0d8!important}',
+    'body.dark-mode .dash-menu-item:hover{background:#1e1e32!important}',
+    'body.dark-mode .dash-menu-item.active{background:#6c47ff!important;color:#fff!important}',
+    'body.dark-mode .booking-badge{border:1px solid #2a2a40!important}',
+    'body.dark-mode .btn-ok{background:#166534!important}',
+    'body.dark-mode .btn-no{background:#7f1d1d!important}',
+    // Full-page chat view — must use .active so ID selector doesn't override .view{display:none}
+    '#view-chat.active{display:flex;flex-direction:column;background:#e8e5e0;height:100vh;padding-top:var(--nav-h);box-sizing:border-box}',
+    '.cv-layout{display:grid;grid-template-columns:300px 1fr;flex:1;overflow:hidden}',
+    '.cv-back-btn{background:none;border:none;cursor:pointer;color:#444;font-size:.88rem;padding:0;display:flex;align-items:center;gap:4px;font-weight:500}',
+    '.cv-back-btn:hover{color:#6c47ff}',
+    'body.dark-mode .cv-back-btn{color:#a0a0c0}',
+    'body.dark-mode .cv-back-btn:hover{color:#a090ff}',
+    '@media(max-width:640px){.cv-layout{grid-template-columns:1fr}}',
+    '.cv-sidebar{border-right:1px solid #ddd;overflow-y:auto;background:#f5f3ef;display:flex;flex-direction:column}',
+    '.cv-sidebar-header{padding:20px 18px 16px;border-bottom:1px solid #e0ddd8;flex-shrink:0;background:#ece9e3}',
+    '.cv-main{display:flex;flex-direction:column;background:#e8e5e0;overflow:hidden}',
+    '.cv-active-header{padding:14px 20px;border-bottom:1px solid #ddd;background:#f5f3ef;display:flex;align-items:center;gap:12px;flex-shrink:0}',
+    '.cv-messages{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:8px}',
+    '.cv-input-row{display:flex;gap:10px;padding:14px 20px;border-top:1px solid #ddd;background:#f5f3ef;flex-shrink:0}',
+    '.cv-input{flex:1;border:1.5px solid #d5d0c8;border-radius:24px;padding:10px 18px;font-size:.92rem;outline:none;font-family:inherit;background:#fff}',
+    '.cv-input:focus{border-color:#6c47ff}',
+    '.cv-send-btn{background:#6c47ff;color:#fff;border:none;border-radius:24px;padding:10px 22px;cursor:pointer;font-size:.9rem;font-weight:600;white-space:nowrap}',
+    '.cv-send-btn:hover{background:#5a38e0}',
+    // Shared convo/message classes
+    '.chat-convo-item{display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;border-bottom:1px solid #e8e4de;transition:background .15s}',
+    '.chat-convo-item:hover{background:#ede9e2}',
+    '.chat-convo-item.active{background:#e0dbd2;border-right:3px solid #6c47ff}',
+    '.chat-convo-avatar{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:.88rem;font-weight:700;flex-shrink:0}',
+    '.chat-convo-info{flex:1;min-width:0}',
+    '.chat-convo-name{font-size:.9rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '.chat-convo-last{font-size:.77rem;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}',
+    '.chat-convo-badge{background:#6c47ff;color:#fff;border-radius:50%;min-width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;flex-shrink:0}',
+    '.chat-msg{max-width:70%;padding:10px 14px;border-radius:14px;font-size:.9rem;line-height:1.5;word-break:break-word}',
+    '.chat-msg.mine{background:#6c47ff;color:#fff;align-self:flex-end;border-radius:14px 14px 2px 14px}',
+    '.chat-msg.theirs{background:#f5f3ef;color:#1a1a2e;align-self:flex-start;border-radius:14px 14px 14px 2px;box-shadow:0 1px 3px rgba(0,0,0,.06)}',
+    '.chat-msg-time{font-size:.68rem;margin-top:4px;opacity:.6;text-align:right}',
+    '.chat-msg.theirs .chat-msg-time{text-align:left}',
+    '.chat-empty{display:flex;align-items:center;justify-content:center;flex:1;color:#aaa;font-size:.9rem;text-align:center}',
+    // DND card
+    '.dnd-toggle-card{display:flex;align-items:center;justify-content:space-between;background:#fff5f5;border:1px solid #fee2e2;border-radius:10px;padding:14px 16px;margin-bottom:16px;gap:12px}',
+    '.dnd-slider{background:#ccc}',
+    '#dnd-check:checked~.dnd-slider{background:#ef4444!important}',
+    // Klant dashboard
+    '.kl-stat-card{text-align:center;flex:1;min-width:80px}',
+    '.kl-recent-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f0f0f0;gap:8px}',
+    '.bk-filter-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}',
+    '.bk-filter{background:#f0ede8;border:1.5px solid #d5d0c8;color:#555;border-radius:20px;padding:5px 14px;font-size:.8rem;font-weight:600;cursor:pointer;transition:all .15s}',
+    '.bk-filter.active{background:#6c47ff;border-color:#6c47ff;color:#fff}',
+    '.bk-filter:hover:not(.active){background:#e6e0ff;border-color:#6c47ff;color:#6c47ff}',
+    '.bk-rebook-btn{background:#f0ede8;border:1.5px solid #d5d0c8;color:#555;border-radius:20px;padding:4px 12px;font-size:.75rem;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap}',
+    '.bk-rebook-btn:hover{background:#6c47ff;border-color:#6c47ff;color:#fff}',
+    'body.dark-mode .kl-recent-row{border-color:#2a2a3e}',
+    'body.dark-mode .bk-filter{background:#1e1e38;border-color:#3a3a55;color:#b0b0cc}',
+    'body.dark-mode .bk-filter.active{background:#6c47ff;color:#fff}',
+    'body.dark-mode .bk-rebook-btn{background:#1e1e38;border-color:#3a3a55;color:#b0b0cc}',
+    'body.dark-mode .bk-rebook-btn:hover{background:#6c47ff;color:#fff}',
+    // Jobs
+    '.job-post-form{background:#f8f7f4;border:1.5px solid #e8e4dc;border-radius:12px;padding:20px;margin-bottom:8px}',
+    '.job-card{background:#fff;border:1.5px solid #e8e4dc;border-radius:12px;padding:16px 18px;margin-bottom:12px}',
+    '.job-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:6px}',
+    '.job-title{font-weight:700;font-size:.95rem;color:#1a1a2e}',
+    '.job-meta{font-size:.78rem;color:#888;margin-top:2px}',
+    '.job-desc-text{font-size:.83rem;color:#555;margin:8px 0;line-height:1.5}',
+    '.job-card-footer{display:flex;gap:14px;align-items:center;margin-top:10px;font-size:.8rem;color:#888;flex-wrap:wrap}',
+    '.job-status-badge{border-radius:20px;padding:3px 10px;font-size:.75rem;font-weight:700}',
+    '.job-open{background:#dcfce7;color:#166534}',
+    '.job-closed{background:#f3f4f6;color:#6b7280}',
+    '.job-budget-tag{background:#fef3c7;color:#b7791f;border-radius:20px;padding:3px 10px;font-size:.75rem;font-weight:600;white-space:nowrap}',
+    '.job-respond-wrap{margin-top:12px;padding-top:12px;border-top:1px solid #f0ede8}',
+    '.job-respond-input{width:100%;border:1.5px solid #d5d0c8;border-radius:8px;padding:8px 12px;font-size:.82rem;font-family:inherit;resize:vertical;background:#fff}',
+    '.job-respond-input:focus{border-color:#6c47ff;outline:none}',
+    '.job-response-item{background:#f8f7f4;border-radius:10px;padding:12px 14px}',
+    '.cat-jobs-badge{font-size:.72rem;color:#6c47ff;font-weight:600;margin-top:4px;background:#f0eeff;border-radius:20px;padding:2px 8px;display:inline-block}',
+    'body.dark-mode .job-post-form{background:#13132a;border-color:#2a2a3e}',
+    'body.dark-mode .job-card{background:#1a1a2e;border-color:#2a2a3e}',
+    'body.dark-mode .job-title{color:#dddde8}',
+    'body.dark-mode .job-desc-text{color:#a0a0c0}',
+    'body.dark-mode .job-respond-wrap{border-color:#2a2a3e}',
+    'body.dark-mode .job-respond-input{background:#13132a;border-color:#3a3a55;color:#dddde8}',
+    'body.dark-mode .job-response-item{background:#13132a}',
+    'body.dark-mode .cat-jobs-badge{background:#1e1e38;color:#a090ff}',
+    // Booking modal polish
+    '.bk-modal-wrap{width:100%;max-width:500px;max-height:90vh;overflow-y:auto;padding:28px;border-radius:20px;background:#fff;position:relative}',
+    '.bk-provider-header{display:flex;align-items:center;gap:14px;margin-bottom:20px;padding-bottom:18px;border-bottom:1px solid #f0ede8}',
+    '.bk-avatar{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:1rem;flex-shrink:0}',
+    '.bk-dur-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}',
+    '.bk-dur-chip{background:#f0ede8;border:1.5px solid #d5d0c8;color:#555;border-radius:20px;padding:6px 14px;font-size:.82rem;font-weight:600;cursor:pointer;transition:all .15s}',
+    '.bk-dur-chip.active{background:#6c47ff;border-color:#6c47ff;color:#fff}',
+    '.bk-dur-chip:hover:not(.active){background:#e6e0ff;border-color:#6c47ff;color:#6c47ff}',
+    '.bk-slots{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;min-height:40px;align-items:flex-start}',
+    '.bk-slots-placeholder{color:#aaa;font-size:.82rem;padding:8px 0;width:100%}',
+    '.bk-slot{background:#f0ede8;border:1.5px solid #d5d0c8;color:#444;border-radius:10px;padding:7px 14px;font-size:.82rem;font-weight:600;cursor:pointer;transition:all .15s}',
+    '.bk-slot.active{background:#6c47ff;border-color:#6c47ff;color:#fff}',
+    '.bk-slot:hover:not(.active){background:#e6e0ff;border-color:#6c47ff;color:#6c47ff}',
+    '.bk-price-est{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:.85rem;color:#166534}',
+    'body.dark-mode .bk-modal-wrap{background:#1a1a2e!important;color:#dddde8!important}',
+    'body.dark-mode .bk-provider-header{border-color:#2a2a3e!important}',
+    'body.dark-mode .bk-dur-chip{background:#1e1e38;border-color:#3a3a55;color:#b0b0cc}',
+    'body.dark-mode .bk-dur-chip.active{background:#6c47ff;color:#fff}',
+    'body.dark-mode .bk-slot{background:#1e1e38;border-color:#3a3a55;color:#b0b0cc}',
+    'body.dark-mode .bk-slot.active{background:#6c47ff;color:#fff}',
+    'body.dark-mode .bk-price-est{background:#0d2018;border-color:#166534;color:#4ade80}',
+    // Schedule picker
+    '.sched-picker{margin-top:4px}',
+    '.sched-days{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}',
+    '.sched-day{background:#f0ede8;border:1.5px solid #d5d0c8;color:#555;border-radius:20px;padding:5px 13px;font-size:.8rem;font-weight:600;cursor:pointer;transition:background .15s,color .15s,border-color .15s;line-height:1.4}',
+    '.sched-day.active{background:#6c47ff;border-color:#6c47ff;color:#fff}',
+    '.sched-day:hover:not(.active){background:#e6e0ff;border-color:#6c47ff;color:#6c47ff}',
+    '.sched-time-row{display:flex;flex-direction:column;gap:10px}',
+    '.sched-time-block{display:flex;align-items:center;gap:10px}',
+    '.sched-time-label{font-size:.8rem;color:#888;min-width:28px}',
+    '.sched-time-lbl{min-width:42px;font-size:.88rem;font-weight:700;color:#6c47ff;text-align:center}',
+    '.sched-range{flex:1;accent-color:#6c47ff;cursor:pointer;height:4px}',
+    'body.dark-mode .sched-day{background:#1e1e38;border-color:#3a3a55;color:#b0b0cc}',
+    'body.dark-mode .sched-day.active{background:#6c47ff;border-color:#6c47ff;color:#fff}',
+    'body.dark-mode .sched-day:hover:not(.active){background:#2a2050;border-color:#6c47ff;color:#a090ff}',
+    'body.dark-mode .sched-time-label{color:#666}',
+    'body.dark-mode .sched-time-lbl{color:#a090ff}',
   ].join('');
   document.head.appendChild(s);
 }
@@ -1310,10 +2566,82 @@ function ini(name) {
     : parts[0].substring(0, 2).toUpperCase();
 }
 
+function avatarColor(name) {
+  const colors = ['#e91e8c','#9c27b0','#3f51b5','#0097a7','#00897b','#43a047','#f57c00','#e53935'];
+  let h = 0;
+  for (let i = 0; i < (name || '').length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
+  return colors[Math.abs(h) % colors.length];
+}
+
 function esc(s) {
   return String(s || '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// ─── Schedule picker helpers ───────────────────────────────────────────────
+function mkdMinToTime(m) {
+  return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+}
+window.mkdMinToTime = mkdMinToTime;
+
+function _timeToMin(t) {
+  const [h, m] = (t || '').split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+function fmtSchedule(val) {
+  if (!val) return '';
+  try {
+    const p = JSON.parse(val);
+    if (!p.days || !p.days.length) return val;
+    const LABEL = { ma:'Ma', di:'Di', wo:'Wo', do:'Do', vr:'Vr', za:'Za', zo:'Zo' };
+    return p.days.map(d => LABEL[d] || d).join(' ') + '  ' + (p.start || '') + '–' + (p.end || '');
+  } catch (e) { return val; }
+}
+
+function _schedPickerHTML(prefix, val) {
+  const DAYS = [['ma','Ma'],['di','Di'],['wo','Wo'],['do','Do'],['vr','Vr'],['za','Za'],['zo','Zo']];
+  let selDays = [], startMin = 480, endMin = 1020;
+  try {
+    const p = JSON.parse(val || '{}');
+    selDays   = p.days  || [];
+    startMin  = _timeToMin(p.start || '08:00');
+    endMin    = _timeToMin(p.end   || '17:00');
+  } catch (e) {}
+
+  const chips = DAYS.map(([k, label]) =>
+    '<button type="button" class="sched-day' + (selDays.includes(k) ? ' active' : '') +
+    '" data-day="' + k + '" onclick="this.classList.toggle(\'active\')">' + label + '</button>'
+  ).join('');
+
+  return '<div class="sched-picker" id="' + prefix + '-sched">' +
+    '<div class="sched-days">' + chips + '</div>' +
+    '<div class="sched-time-row">' +
+      '<div class="sched-time-block">' +
+        '<span class="sched-time-label">Van</span>' +
+        '<span class="sched-time-lbl" id="' + prefix + '-start-lbl">' + mkdMinToTime(startMin) + '</span>' +
+        '<input type="range" class="sched-range" id="' + prefix + '-start" min="0" max="1380" step="30" value="' + startMin + '"' +
+        ' oninput="document.getElementById(\'' + prefix + '-start-lbl\').textContent=mkdMinToTime(+this.value)">' +
+      '</div>' +
+      '<div class="sched-time-block">' +
+        '<span class="sched-time-label">Tot</span>' +
+        '<span class="sched-time-lbl" id="' + prefix + '-end-lbl">' + mkdMinToTime(endMin) + '</span>' +
+        '<input type="range" class="sched-range" id="' + prefix + '-end" min="0" max="1380" step="30" value="' + endMin + '"' +
+        ' oninput="document.getElementById(\'' + prefix + '-end-lbl\').textContent=mkdMinToTime(+this.value)">' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+function _schedPickerVal(prefix) {
+  const el = document.getElementById(prefix + '-sched');
+  if (!el) return '';
+  const days  = Array.from(el.querySelectorAll('.sched-day.active')).map(b => b.dataset.day);
+  const start = mkdMinToTime(+(document.getElementById(prefix + '-start')?.value || 480));
+  const end   = mkdMinToTime(+(document.getElementById(prefix + '-end')?.value   || 1020));
+  if (!days.length) return '';
+  return JSON.stringify({ days, start, end });
 }
 
 function fmtDur(min) {
