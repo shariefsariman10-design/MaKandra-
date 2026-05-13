@@ -604,8 +604,8 @@
         <input type="text" id="pv-tagline" placeholder="bijv. Professioneel schilderwerk voor binnen en buiten" />
       </div>
       <div class="form-group">
-        <label>Tarief</label>
-        <input type="text" id="pv-price" placeholder="bijv. SRD 150/uur of SRD 500/project" />
+        <label>Tarief <span style="font-weight:400;color:var(--text-muted,#888)">(SRD per uur)</span></label>
+        <input type="number" id="pv-price" min="0" step="1" placeholder="bijv. 150" />
       </div>
       <div class="form-error hidden" id="provider-error"></div>
       <button class="btn-primary btn-full" onclick="handleProviderSignup()">Profiel aanmaken</button>

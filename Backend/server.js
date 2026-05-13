@@ -87,7 +87,7 @@ app.post('/signup', async (req, res) => {
 
     const [result] = await db.query(
       'INSERT INTO users (name, email, password, role, buurt, category, experience, bio, hourly_rate, phone, working_hours) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [name.trim(), email.toLowerCase(), hashed, role, buurt, category || null, experience || null, bio || null, hourly_rate || null, phone || null, working_hours || null]
+      [name.trim(), email.toLowerCase(), hashed, role, buurt, category || null, experience || null, bio || null, (parseFloat(hourly_rate) || null), phone || null, working_hours || null]
     );
 
     // Send a welcome email (informational only — account is already active)
@@ -285,7 +285,7 @@ app.put('/profile/:id', async (req, res) => {
     if (!name || !name.trim()) return res.status(400).json({ error: 'Naam is verplicht.' });
     await db.query(
       'UPDATE users SET name=?, category=?, experience=?, bio=?, hourly_rate=?, buurt=?, phone=?, working_hours=? WHERE id=?',
-      [name.trim(), category, experience, bio, hourly_rate, buurt, phone || null, working_hours || null, req.params.id]
+      [name.trim(), category, experience, bio, (parseFloat(hourly_rate) || null), buurt, phone || null, working_hours || null, req.params.id]
     );
     res.json({ message: 'Profiel bijgewerkt!' });
   } catch (err) {
