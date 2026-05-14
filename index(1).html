@@ -627,15 +627,11 @@
         <p>Deel uw ervaring met deze dienstverlener</p>
       </div>
       <div class="form-group">
-        <label>Beoordeling</label>
-        <div class="star-rating" id="star-selector">
-          <span class="star" data-val="2"  onmouseover="starHover(2)"  onmouseout="starOut()" onclick="starPick(2)">★</span>
-          <span class="star" data-val="4"  onmouseover="starHover(4)"  onmouseout="starOut()" onclick="starPick(4)">★</span>
-          <span class="star" data-val="6"  onmouseover="starHover(6)"  onmouseout="starOut()" onclick="starPick(6)">★</span>
-          <span class="star" data-val="8"  onmouseover="starHover(8)"  onmouseout="starOut()" onclick="starPick(8)">★</span>
-          <span class="star" data-val="10" onmouseover="starHover(10)" onmouseout="starOut()" onclick="starPick(10)">★</span>
-        </div>
-        <input type="hidden" id="review-rating" value="10" />
+        <label>Beoordeling — <strong><span id="review-pct-label">75%</span></strong></label>
+        <input type="range" id="review-rating" min="0" max="100" value="75" step="1"
+               oninput="document.getElementById('review-pct-label').textContent=this.value+'%'"
+               style="width:100%;accent-color:#6c47ff;cursor:pointer;margin-top:6px" />
+        <div style="display:flex;justify-content:space-between;font-size:.72rem;color:#888;margin-top:2px"><span>0%</span><span>50%</span><span>100%</span></div>
       </div>
       <div class="form-group">
         <label>Uw recensie</label>

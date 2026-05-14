@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "bugs": [
+    {
+      "id": "bug-001",
+      "timestamp": "2026-05-14T10:56:13.026Z",
+      "error_message": "Significant refactor of ",
+      "file": "index(1).html",
+      "root_cause": "8 lines replaced/restructured",
+      "fix": "Rewrote 11→7 lines (8 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "html"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-14T10:56:13.026Z"
+    },
+    {
+      "id": "bug-002",
+      "timestamp": "2026-05-14T10:56:23.767Z",
+      "error_message": "Significant refactor of ",
+      "file": "script.js",
+      "root_cause": "24 lines replaced/restructured",
+      "fix": "Rewrote 45→16 lines (24 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-14T10:56:23.767Z"
+    },
+    {
+      "id": "bug-003",
+      "timestamp": "2026-05-14T10:56:56.739Z",
+      "error_message": "Incorrect value in code",
+      "file": "script.js",
+      "root_cause": "Had ' + '",
+      "fix": "Changed to ' + rv.score + '",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-14T10:56:56.739Z"
+    },
+    {
+      "id": "bug-004",
+      "timestamp": "2026-05-14T10:57:25.257Z",
+      "error_message": "Missing error handling in unknown",
+      "file": "Backend/server.js",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-14T10:57:25.257Z"
+    },
+    {
+      "id": "bug-005",
+      "timestamp": "2026-05-14T10:58:04.571Z",
+      "error_message": "Missing error handling in function",
+      "file": "script.js",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block | Also: async function _loadProviderPortfolio(providerId) {; const grid = document.getElementById('pv-portfolio-grid');",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-05-14T10:58:33.335Z"
+    }
+  ]
+}

@@ -512,7 +512,7 @@ function providerCard(w, rank) {
   const isFav     = favs.includes(w.id);
   const price     = w.hourly_rate ? 'SRD ' + w.hourly_rate + '/u' : '';
   const rankBadge = rank && rank <= 3 ? '<span class="rank-badge">#' + rank + '</span>' : '';
-  const scoreNum  = w.avg_score ? Math.round(w.avg_score * 10) : null;
+  const scoreNum  = w.avg_score ? Math.round(w.avg_score) : null;
   const rc        = w.review_count || 0;
   const availDot  = w.is_available === 0
     ? ' <span class="avail-dot busy" title="Bezet"></span>'
@@ -630,7 +630,7 @@ function _renderProfile(w) {
   const favs     = getFavs();
   const isFav    = favs.includes(w.id);
   const canBook  = currentUser && currentUser.role === 'klant';
-  const scoreNum = w.avg_score ? Math.round(w.avg_score * 10) : 0;
+  const scoreNum = w.avg_score ? Math.round(w.avg_score) : 0;
   const availBadge = w.is_available === 0
     ? '<span class="prof-avail-badge busy">Bezet</span>'
     : '<span class="prof-avail-badge">Beschikbaar</span>';
@@ -698,6 +698,12 @@ function _renderProfile(w) {
             ? '<div class="prof-card"><div class="prof-section-title">Review plaatsen</div><button class="btn-contact" onclick="openReviewModal(' + w.id + ')">Review schrijven</button></div>'
             : '') +
 
+          // Portfolio
+          '<div class="prof-card" id="pv-portfolio-card">' +
+            '<div class="prof-section-title">Portfolio</div>' +
+            '<div id="pv-portfolio-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px"><p style="color:#aaa;font-size:.82rem">Laden...</p></div>' +
+          '</div>' +
+
           // Reviews list
           '<div class="prof-card">' +
             '<div class="prof-section-title">Beoordelingen (' + (w.review_count || 0) + ')</div>' +
@@ -745,6 +751,26 @@ function _renderProfile(w) {
   showView('profile');
   _loadReviews(w.id);
   _loadProviderStats(w.id);
+  _loadProviderPortfolio(w.id);
+}
+
+async function _loadProviderPortfolio(providerId) {
+  const grid = document.getElementById('pv-portfolio-grid');
+  if (!grid) return;
+  try {
+    const r     = await fetch(API + '/portfolio/' + providerId);
+    const items = await r.json();
+    const card  = document.getElementById('pv-portfolio-card');
+    if (!items.length) { if (card) card.style.display = 'none'; return; }
+    if (card) card.style.display = '';
+    grid.innerHTML = items.map(item =>
+      '<div style="aspect-ratio:1;border-radius:8px;overflow:hidden;background:#111;cursor:pointer" onclick="this.querySelector(\'video,img\').requestFullscreen?.()">' +
+        (item.file_type === 'video'
+          ? '<video src="' + API + item.file_path + '" style="width:100%;height:100%;object-fit:cover" muted playsinline controls></video>'
+          : '<img src="' + API + item.file_path + '" style="width:100%;height:100%;object-fit:cover" loading="lazy">') +
+      '</div>'
+    ).join('');
+  } catch { /* silent */ }
 }
 
 async function _loadReviews(providerId) {
@@ -761,7 +787,7 @@ async function _loadReviews(providerId) {
       '<div class="review-item">' +
         '<div class="review-header">' +
           '<strong>' + esc(rv.reviewer_name || 'Anoniem') + '</strong>' +
-          '<span class="review-score">' + '★'.repeat(Math.round(rv.score / 2)) + '☆'.repeat(5 - Math.round(rv.score / 2)) + '</span>' +
+          '<span class="review-score">' + rv.score + '%</span>' +
         '</div>' +
         '<p style="color:#555;margin:4px 0 0">' + esc(rv.text) + '</p>' +
       '</div>'
@@ -1053,46 +1079,17 @@ function openReviewModal(providerId) {
   document.getElementById('review-target-id').value = providerId;
   document.getElementById('review-text').value      = '';
   document.getElementById('review-error').textContent = '';
-  updateSlider(10);
+  const slider = document.getElementById('review-rating');
+  if (slider) { slider.value = 75; document.getElementById('review-pct-label').textContent = '75%'; }
   document.getElementById('review-overlay').classList.remove('hidden');
 }
 window.openReviewModal = openReviewModal;
 
 function closeReviewModal(e) {
-  if (e.target === document.getElementById('review-overlay')) {
+  if (!e || e.target === document.getElementById('review-overlay')) {
     document.getElementById('review-overlay').classList.add('hidden');
   }
 }
-
-function updateSlider(val) {
-  const hidden = document.getElementById('review-rating');
-  if (hidden) hidden.value = val;
-  document.querySelectorAll('#star-selector .star').forEach(s => {
-    s.classList.toggle('active', +s.dataset.val <= +val);
-    s.classList.remove('hover');
-  });
-}
-
-function starHover(val) {
-  document.querySelectorAll('#star-selector .star').forEach(s => {
-    s.classList.toggle('hover', +s.dataset.val <= val);
-  });
-}
-window.starHover = starHover;
-
-function starOut() {
-  const cur = +(document.getElementById('review-rating')?.value || 10);
-  document.querySelectorAll('#star-selector .star').forEach(s => {
-    s.classList.remove('hover');
-    s.classList.toggle('active', +s.dataset.val <= cur);
-  });
-}
-window.starOut = starOut;
-
-function starPick(val) {
-  updateSlider(val);
-}
-window.starPick = starPick;
 
 async function submitReview() {
   if (submitReview._running) return;
@@ -1177,6 +1174,7 @@ function renderDVDash(el) {
   loadBookingsDV();
   loadDVNotifications();
   renderCalendar();
+  loadDVPortfolio();
 }
 
 function dvTab(panel, el) {
@@ -1189,6 +1187,7 @@ function dvTab(panel, el) {
   if (panel === 'opdrachten')   loadDVOpdrachten();
   if (panel === 'agenda')       renderCalendar();
   if (panel === 'notificaties') loadDVNotifications();
+  if (panel === 'profiel')      loadDVPortfolio();
   if (panel === 'admin')        loadAdminPanel();
 }
 window.dvTab = dvTab;
@@ -1282,6 +1281,15 @@ function _dvProfiel() {
     '<div class="form-group"><label>Buurt</label><select id="dv-buurt">' + distOpts(currentUser.buurt) + '</select></div>' +
     '<button class="btn-primary" onclick="saveProfile()">Opslaan</button>' +
     '<div class="form-error" id="dv-prof-msg"></div>' +
+    '<hr style="margin:24px 0;border-color:rgba(255,255,255,.08)">' +
+    '<div class="dashboard-panel-title" style="font-size:1rem;margin-bottom:12px">Portfolio</div>' +
+    '<p style="font-size:.8rem;color:#aaa;margin-bottom:12px">Voeg foto\'s en video\'s van je werk toe (max. 10 MB per bestand).</p>' +
+    '<div id="dv-portfolio-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;margin-bottom:14px"></div>' +
+    '<label class="btn-secondary" style="cursor:pointer;display:inline-block;padding:8px 18px;font-size:.84rem">' +
+      'Bestand uploaden' +
+      '<input type="file" id="dv-portfolio-input" accept="image/*,video/*" style="display:none" onchange="uploadPortfolioItem()">' +
+    '</label>' +
+    '<div class="form-error" id="dv-portfolio-msg"></div>' +
   '</div>';
 }
 
@@ -1520,7 +1528,7 @@ async function loadKlantReviews() {
       '<div class="review-item">' +
         '<div class="review-header">' +
           '<strong>' + esc(rv.provider_name) + '</strong>' +
-          '<span class="review-score">' + '★'.repeat(Math.round(rv.score / 2)) + '☆'.repeat(5 - Math.round(rv.score / 2)) + '</span>' +
+          '<span class="review-score">' + rv.score + '%</span>' +
         '</div>' +
         '<p style="color:#555;margin:4px 0 0">' + esc(rv.text) + '</p>' +
         '<small style="color:#aaa">' + new Date(rv.created_at).toLocaleDateString('nl-NL') + '</small>' +
@@ -1912,6 +1920,57 @@ async function cancelKlantBooking(bookingId, dvId) {
   } catch { showToast('Fout bij annuleren.', 'error'); }
 }
 window.cancelKlantBooking = cancelKlantBooking;
+
+// ─────────────────────────────────────────
+// PORTFOLIO
+// ─────────────────────────────────────────
+
+async function loadDVPortfolio() {
+  const grid = document.getElementById('dv-portfolio-grid');
+  if (!grid) return;
+  try {
+    const r     = await fetch(API + '/portfolio/' + currentUser.id);
+    const items = await r.json();
+    if (!items.length) { grid.innerHTML = '<p style="font-size:.8rem;color:#aaa;grid-column:1/-1">Nog geen portfolio items.</p>'; return; }
+    grid.innerHTML = items.map(item =>
+      '<div class="portfolio-thumb" style="position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;background:#111">' +
+        (item.file_type === 'video'
+          ? '<video src="' + API + item.file_path + '" style="width:100%;height:100%;object-fit:cover" muted playsinline></video>'
+          : '<img src="' + API + item.file_path + '" style="width:100%;height:100%;object-fit:cover" loading="lazy">') +
+        '<button onclick="deletePortfolioItem(' + item.id + ',this)" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.7);border:none;color:#fff;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:.75rem;line-height:22px;text-align:center">✕</button>' +
+      '</div>'
+    ).join('');
+  } catch { grid.innerHTML = '<p style="font-size:.8rem;color:#aaa">Fout bij laden portfolio.</p>'; }
+}
+
+async function uploadPortfolioItem() {
+  const input  = document.getElementById('dv-portfolio-input');
+  const msgEl  = document.getElementById('dv-portfolio-msg');
+  const file   = input?.files?.[0];
+  if (!file) return;
+  msgEl.textContent = 'Uploaden...';
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const r = await fetch(API + '/portfolio/' + currentUser.id, { method: 'POST', body: fd });
+    const d = await r.json();
+    if (!r.ok) { msgEl.textContent = d.error; return; }
+    msgEl.textContent = '';
+    input.value = '';
+    loadDVPortfolio();
+    showToast('Item toegevoegd!', 'success');
+  } catch { msgEl.textContent = 'Uploadfout.'; }
+}
+window.uploadPortfolioItem = uploadPortfolioItem;
+
+async function deletePortfolioItem(id, btn) {
+  btn.textContent = '…';
+  try {
+    await fetch(API + '/portfolio/item/' + id, { method: 'DELETE' });
+    loadDVPortfolio();
+  } catch { btn.textContent = '✕'; }
+}
+window.deletePortfolioItem = deletePortfolioItem;
 
 // ─────────────────────────────────────────
 // NOTIFICATIONS (dashboard)

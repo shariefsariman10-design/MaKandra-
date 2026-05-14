@@ -734,6 +734,54 @@ app.post('/upload/avatar/:id', upload.single('avatar'), async (req, res) => {
 });
 
 // ─────────────────────────────────────────
+// PORTFOLIO
+// ─────────────────────────────────────────
+
+const portfolioStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, path.join(__dirname, 'uploads')),
+  filename:    (req, file, cb) => cb(null, 'portfolio-' + req.params.userId + '-' + Date.now() + path.extname(file.originalname)),
+});
+const uploadPortfolio = multer({
+  storage: portfolioStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => cb(null, /image\/(jpeg|png|webp|gif)|video\/(mp4|webm|ogg)/.test(file.mimetype)),
+});
+
+app.post('/portfolio/:userId', uploadPortfolio.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Ongeldig bestand.' });
+    const isVideo    = req.file.mimetype.startsWith('video/');
+    const file_path  = '/uploads/' + req.file.filename;
+    const caption    = req.body.caption || null;
+    await db.query('INSERT INTO portfolio (user_id, file_path, file_type, caption) VALUES (?, ?, ?, ?)',
+      [req.params.userId, file_path, isVideo ? 'video' : 'image', caption]);
+    res.status(201).json({ url: file_path, type: isVideo ? 'video' : 'image' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/portfolio/:userId', async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM portfolio WHERE user_id = ? ORDER BY created_at DESC', [req.params.userId]);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/portfolio/item/:itemId', async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT file_path, user_id FROM portfolio WHERE id = ?', [req.params.itemId]);
+    if (!rows.length) return res.status(404).json({ error: 'Item niet gevonden.' });
+    await db.query('DELETE FROM portfolio WHERE id = ?', [req.params.itemId]);
+    res.json({ message: 'Verwijderd.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────
 // CHAT / MESSAGES
 // ─────────────────────────────────────────
 
@@ -905,6 +953,14 @@ app.get('/job-responses/:jobId', async (req, res) => {
 
 (async () => {
   try {
+    await db.query(`CREATE TABLE IF NOT EXISTS portfolio (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      file_path VARCHAR(500) NOT NULL,
+      file_type ENUM('image','video') NOT NULL DEFAULT 'image',
+      caption VARCHAR(255) NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`);
     await db.query(`CREATE TABLE IF NOT EXISTS messages (
       id INT AUTO_INCREMENT PRIMARY KEY,
       sender_id INT NOT NULL,
