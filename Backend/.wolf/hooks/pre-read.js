@@ -4,7 +4,7 @@ async function main() {
     ensureWolfDir();
     const wolfDir = getWolfDir();
     const hooksDir = path.join(wolfDir, "hooks");
-    const sessionFile = path.join(hooksDir, "session.json");
+    const sessionFile = path.join(hooksDir, "_session.json");
     const raw = await readStdin();
     let input;
     try {

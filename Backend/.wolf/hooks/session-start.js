@@ -18,7 +18,7 @@ async function main() {
     }
     catch { }
     const hooksDir = path.join(wolfDir, "hooks");
-    const sessionFile = path.join(hooksDir, "session.json");
+    const sessionFile = path.join(hooksDir, "_session.json");
     const now = new Date();
     const sessionId = `session-${now.toISOString().slice(0, 10)}-${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}`;
     // Create fresh session state

@@ -68,8 +68,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelector('#review-modal .modal-x')?.addEventListener('click', () => {
     document.getElementById('review-overlay').classList.add('hidden');
   });
-  updateSlider(10); // default 5 stars
-
   // Close dropdown when clicking outside the user-pill area
   document.addEventListener('click', e => {
     const pill     = document.querySelector('.user-pill');
@@ -86,6 +84,12 @@ document.addEventListener('DOMContentLoaded', () => {
   if (currentUser) {
     pollNotifications();
     setInterval(pollNotifications, 30000);
+  }
+
+  // Show reset password modal if URL contains ?reset_token=
+  const resetToken = new URLSearchParams(window.location.search).get('reset_token');
+  if (resetToken) {
+    document.getElementById('reset-pw-overlay')?.classList.remove('hidden');
   }
 });
 
@@ -137,6 +141,63 @@ async function handleLogin() {
     setInterval(pollNotifications, 30000);
   } catch { errEl.textContent = 'Verbindingsfout. Controleer of de server actief is.'; }
 }
+
+function toggleForgotPassword() {
+  const form = document.getElementById('forgot-pw-form');
+  form.classList.toggle('hidden');
+  if (!form.classList.contains('hidden')) document.getElementById('forgot-email').focus();
+}
+window.toggleForgotPassword = toggleForgotPassword;
+
+async function handleForgotPassword() {
+  const email   = document.getElementById('forgot-email').value.trim();
+  const errEl   = document.getElementById('forgot-error');
+  const succEl  = document.getElementById('forgot-success');
+  errEl.textContent = ''; errEl.classList.add('hidden');
+  succEl.textContent = ''; succEl.classList.add('hidden');
+
+  if (!email) { errEl.textContent = 'Voer je e-mailadres in.'; errEl.classList.remove('hidden'); return; }
+
+  try {
+    const r    = await fetch(API + '/forgot-password', { method: 'POST', headers: ct(), body: JSON.stringify({ email }) });
+    const data = await r.json();
+    if (!r.ok) { errEl.textContent = data.error; errEl.classList.remove('hidden'); return; }
+    succEl.textContent = data.message;
+    succEl.classList.remove('hidden');
+    document.getElementById('forgot-email').value = '';
+  } catch { errEl.textContent = 'Verbindingsfout.'; errEl.classList.remove('hidden'); }
+}
+window.handleForgotPassword = handleForgotPassword;
+
+async function handleResetPassword() {
+  const token    = new URLSearchParams(window.location.search).get('reset_token');
+  const pw       = document.getElementById('reset-pw-input').value;
+  const confirm  = document.getElementById('reset-pw-confirm').value;
+  const errEl    = document.getElementById('reset-pw-error');
+  const succEl   = document.getElementById('reset-pw-success');
+  errEl.textContent = ''; errEl.classList.add('hidden');
+  succEl.textContent = ''; succEl.classList.add('hidden');
+
+  if (!pw)           { errEl.textContent = 'Voer een wachtwoord in.'; errEl.classList.remove('hidden'); return; }
+  if (pw.length < 6) { errEl.textContent = 'Minimaal 6 tekens.'; errEl.classList.remove('hidden'); return; }
+  if (pw !== confirm) { errEl.textContent = 'Wachtwoorden komen niet overeen.'; errEl.classList.remove('hidden'); return; }
+
+  try {
+    const r    = await fetch(API + '/reset-password', { method: 'POST', headers: ct(), body: JSON.stringify({ token, new_password: pw }) });
+    const data = await r.json();
+    if (!r.ok) { errEl.textContent = data.error; errEl.classList.remove('hidden'); return; }
+    succEl.textContent = data.message;
+    succEl.classList.remove('hidden');
+    document.getElementById('reset-pw-input').value = '';
+    document.getElementById('reset-pw-confirm').value = '';
+    setTimeout(() => {
+      document.getElementById('reset-pw-overlay').classList.add('hidden');
+      history.replaceState(null, '', window.location.pathname);
+      openAuthModal('login');
+    }, 2500);
+  } catch { errEl.textContent = 'Verbindingsfout.'; errEl.classList.remove('hidden'); }
+}
+window.handleResetPassword = handleResetPassword;
 
 async function handleSignup() {
   const firstName = document.getElementById('su-firstname').value.trim();
@@ -2170,13 +2231,16 @@ window.saveAccountKlant = saveAccountKlant;
 
 async function _saveAccountEmail(newEmail, curPw, newBuurt, msgEl) {
   msgEl.style.color = '';
-  if (!curPw) { msgEl.textContent = 'Vul je huidig wachtwoord in.'; return; }
-  if (newEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(newEmail)) {
-    msgEl.textContent = 'Voer een geldig e-mailadres in.'; return;
-  }
   if (!newEmail && !newBuurt) { msgEl.textContent = 'Geen wijzigingen om op te slaan.'; return; }
+  if (newEmail) {
+    if (!curPw) { msgEl.textContent = 'Vul je huidig wachtwoord in om je e-mailadres te wijzigen.'; return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(newEmail)) {
+      msgEl.textContent = 'Voer een geldig e-mailadres in.'; return;
+    }
+  }
 
-  const body = { current_password: curPw };
+  const body = {};
+  if (newEmail)  body.current_password = curPw;
   if (newEmail)  body.email = newEmail;
   if (newBuurt)  body.buurt = newBuurt;
 

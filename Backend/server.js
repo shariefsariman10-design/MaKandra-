@@ -321,13 +321,16 @@ app.put('/update-name/:id', async (req, res) => {
 app.put('/account/:id', async (req, res) => {
   try {
     const { current_password, email, buurt } = req.body;
-    if (!current_password) return res.status(400).json({ error: 'Huidig wachtwoord is verplicht.' });
+    if (!email && !buurt) return res.status(400).json({ error: 'Niets om bij te werken.' });
+    if (email && !current_password) return res.status(400).json({ error: 'Huidig wachtwoord is verplicht om je e-mailadres te wijzigen.' });
 
     const [rows] = await db.query('SELECT * FROM users WHERE id = ?', [req.params.id]);
     if (!rows.length) return res.status(404).json({ error: 'Gebruiker niet gevonden.' });
 
-    const valid = await bcrypt.compare(current_password, rows[0].password);
-    if (!valid) return res.status(401).json({ error: 'Huidig wachtwoord is onjuist.' });
+    if (email) {
+      const valid = await bcrypt.compare(current_password, rows[0].password);
+      if (!valid) return res.status(401).json({ error: 'Huidig wachtwoord is onjuist.' });
+    }
 
     const updates = [];
     const params  = [];
@@ -424,6 +427,58 @@ app.get('/change-password/confirm', async (req, res) => {
     res.send(htmlPage('Wachtwoord gewijzigd!', 'Je wachtwoord is succesvol bijgewerkt. Je kunt nu inloggen met je nieuwe wachtwoord.', true));
   } catch (err) {
     res.send(htmlPage('Fout', 'Er is een fout opgetreden.', false));
+  }
+});
+
+// FORGOT PASSWORD — send reset link
+app.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'E-mailadres is verplicht.' });
+
+    const [rows] = await db.query('SELECT id, name FROM users WHERE email = ?', [email.toLowerCase()]);
+    // Always return success to prevent email enumeration
+    if (!rows.length) return res.json({ message: 'Als dit e-mailadres bekend is, ontvang je een herstelmail.' });
+
+    const token     = genToken();
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    await db.query('UPDATE users SET pw_change_token=?, pw_change_expires=? WHERE id=?', [token, expiresAt, rows[0].id]);
+
+    const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:5500'}?reset_token=${token}`;
+    await sendEmail(
+      email,
+      'Wachtwoord herstellen — MaKandra',
+      `<h2>Wachtwoord herstellen</h2>
+       <p>Hallo ${rows[0].name}, klik op de knop hieronder om je wachtwoord te herstellen.</p>
+       <a href="${resetLink}" style="display:inline-block;background:#6c47ff;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;margin:16px 0">Wachtwoord herstellen</a>
+       <p style="color:#888;font-size:.9rem">Deze link is 1 uur geldig.</p>
+       <p style="color:#aaa;font-size:.8rem">Heb je dit niet aangevraagd? Dan hoef je niets te doen.</p>`
+    );
+    res.json({ message: 'Als dit e-mailadres bekend is, ontvang je een herstelmail.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Er is een fout opgetreden.' });
+  }
+});
+
+// RESET PASSWORD — apply new password via token
+app.post('/reset-password', async (req, res) => {
+  try {
+    const { token, new_password } = req.body;
+    if (!token || !new_password) return res.status(400).json({ error: 'Token en wachtwoord zijn verplicht.' });
+    if (new_password.length < 6) return res.status(400).json({ error: 'Wachtwoord moet minimaal 6 tekens zijn.' });
+
+    const [rows] = await db.query('SELECT id, pw_change_expires FROM users WHERE pw_change_token = ?', [token]);
+    if (!rows.length) return res.status(400).json({ error: 'Ongeldige of verlopen link.' });
+
+    if (rows[0].pw_change_expires && new Date() > new Date(rows[0].pw_change_expires)) {
+      return res.status(400).json({ error: 'De link is verlopen. Vraag een nieuwe herstelmail aan.' });
+    }
+
+    const hashed = await bcrypt.hash(new_password, 10);
+    await db.query('UPDATE users SET password=?, pw_change_token=NULL, pw_change_expires=NULL WHERE id=?', [hashed, rows[0].id]);
+    res.json({ message: 'Wachtwoord succesvol gewijzigd! Je kunt nu inloggen.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Er is een fout opgetreden.' });
   }
 });
 

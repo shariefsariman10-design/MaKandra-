@@ -459,7 +459,22 @@
       </div>
       <div class="form-error hidden" id="login-error"></div>
       <button class="btn-primary btn-full" onclick="handleLogin()">Inloggen</button>
+      <p class="form-footer" style="margin-top:10px">
+        <a onclick="toggleForgotPassword()" style="cursor:pointer;color:#6c47ff;font-size:.85rem">Wachtwoord vergeten?</a>
+      </p>
       <p class="form-footer">Nog geen account? <a onclick="switchAuthTab('signup')">Aanmelden</a></p>
+
+      <!-- Forgot password inline form -->
+      <div id="forgot-pw-form" class="hidden" style="margin-top:16px;padding-top:16px;border-top:1px solid rgba(255,255,255,.1)">
+        <p style="font-size:.85rem;color:#aaa;margin-bottom:12px">Vul je e-mailadres in en we sturen je een link om je wachtwoord te herstellen.</p>
+        <div class="form-group">
+          <label>E-mailadres</label>
+          <input type="email" id="forgot-email" placeholder="jouw@email.com" />
+        </div>
+        <div class="form-error hidden" id="forgot-error"></div>
+        <div id="forgot-success" class="hidden" style="color:#4caf50;font-size:.85rem;margin-bottom:8px"></div>
+        <button class="btn-primary btn-full" onclick="handleForgotPassword()">Verstuur herstelmail</button>
+      </div>
     </div>
 
     <!-- SIGNUP USER -->
@@ -614,6 +629,29 @@
   </div>
 </div>
 
+
+<!-- ═══════════════════════════════════ RESET PASSWORD MODAL ═══════════════════════════════════ -->
+<div id="reset-pw-overlay" class="overlay hidden">
+  <div class="modal" id="reset-pw-modal">
+    <div class="modal-body">
+      <div class="modal-hero-text">
+        <h2>Nieuw wachtwoord</h2>
+        <p>Voer je nieuwe wachtwoord in</p>
+      </div>
+      <div class="form-group">
+        <label>Nieuw wachtwoord</label>
+        <input type="password" id="reset-pw-input" placeholder="Minimaal 6 tekens" />
+      </div>
+      <div class="form-group">
+        <label>Bevestig wachtwoord</label>
+        <input type="password" id="reset-pw-confirm" placeholder="Herhaal wachtwoord" />
+      </div>
+      <div class="form-error hidden" id="reset-pw-error"></div>
+      <div id="reset-pw-success" class="hidden" style="color:#4caf50;font-size:.85rem;margin-bottom:8px"></div>
+      <button class="btn-primary btn-full" onclick="handleResetPassword()">Wachtwoord opslaan</button>
+    </div>
+  </div>
+</div>
 
 <!-- ═══════════════════════════════════ REVIEW MODAL ═══════════════════════════════════ -->
 <div id="review-overlay" class="overlay hidden" onclick="closeReviewModal(event)">
