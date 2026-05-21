@@ -5,7 +5,7 @@
 
 ## ./
 
-- `CLAUDE.md` — OpenWolf (~57 tok)
+- `claude.md` — OpenWolf (~57 tok)
 - `package-lock.json` — npm lock file (~15726 tok)
 - `package.json` — Node.js package manifest (~128 tok)
 - `server.js` — API routes: POST, GET, PUT (9 endpoints) (~11150 tok)

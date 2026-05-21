@@ -6,7 +6,7 @@ async function main() {
     ensureWolfDir();
     const wolfDir = getWolfDir();
     const hooksDir = path.join(wolfDir, "hooks");
-    const sessionFile = path.join(hooksDir, "_session.json");
+    const sessionFile = path.join(hooksDir, "session.json");
     const projectRoot = process.env.CLAUDE_PROJECT_DIR || process.cwd();
     const raw = await readStdin();
     let input;

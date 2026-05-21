@@ -6,7 +6,7 @@
 ## ./
 
 - `.gitignore` — Git ignore rules (~14 tok)
-- `CLAUDE.md` — OpenWolf (~57 tok)
+- `claude.md` — OpenWolf (~57 tok)
 - `index(1).html` — MaKandra – Vind Diensten in Suriname (~7532 tok)
 - `package-lock.json` — npm lock file (~26 tok)
 - `README.md` — Project documentation (~61 tok)
@@ -16,7 +16,7 @@
 ## .claude/
 
 - `settings.json` (~441 tok)
-- `settings.local.json` (~39 tok)
+- `settings-local.json` (~39 tok)
 
 ## .claude/rules/
 

@@ -3,6 +3,10 @@
         "/^powershell -NoProfile -Command \"Remove-Item -LiteralPath '\\.\\\\backend\\\\node_modules' -Recurse -Force\"$/": {
             "approve": true,
             "matchCommandLine": true
+        },
+        "/^powershell -NoProfile -Command \"Get-ChildItem -Path \\. -Recurse -Force -Filter '_session\\.json' \\| Select-Object -ExpandProperty FullName\"$/": {
+            "approve": true,
+            "matchCommandLine": true
         }
     }
 }
