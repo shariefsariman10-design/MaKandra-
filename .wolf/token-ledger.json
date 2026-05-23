@@ -2,14 +2,14 @@
   "version": 1,
   "created_at": "2026-05-14T10:38:24.925Z",
   "lifetime": {
-    "total_tokens_estimated": 46186,
-    "total_reads": 3,
-    "total_writes": 6,
-    "total_sessions": 15,
-    "anatomy_hits": 1,
-    "anatomy_misses": 2,
-    "repeated_reads_blocked": 6,
-    "estimated_savings_vs_bare_cli": 175196
+    "total_tokens_estimated": 312362,
+    "total_reads": 29,
+    "total_writes": 35,
+    "total_sessions": 25,
+    "anatomy_hits": 9,
+    "anatomy_misses": 20,
+    "repeated_reads_blocked": 32,
+    "estimated_savings_vs_bare_cli": 902230
   },
   "sessions": [
     {
@@ -75,6 +75,489 @@
         "writes_count": 6,
         "repeated_reads_blocked": 6,
         "anatomy_lookups": 1
+      }
+    },
+    {
+      "id": "session-2026-05-21-2003",
+      "started": "2026-05-21T23:03:34.478Z",
+      "ended": "2026-05-21T23:33:07.946Z",
+      "reads": [
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/Backend/server.js",
+          "tokens_estimated": 0,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/index.html",
+          "tokens_estimated": 0,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/script.js",
+          "tokens_estimated": 43749,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/index.html",
+          "tokens_estimated": 352,
+          "action": "edit"
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/index.html",
+          "tokens_estimated": 314,
+          "action": "edit"
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/Backend/server.js",
+          "tokens_estimated": 818,
+          "action": "edit"
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/script.js",
+          "tokens_estimated": 848,
+          "action": "edit"
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/script.js",
+          "tokens_estimated": 99,
+          "action": "edit"
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/script.js",
+          "tokens_estimated": 6,
+          "action": "edit"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 43749,
+        "output_tokens_estimated": 2437,
+        "reads_count": 3,
+        "writes_count": 6,
+        "repeated_reads_blocked": 6,
+        "anatomy_lookups": 1
+      }
+    },
+    {
+      "id": "session-2026-05-21-2003",
+      "started": "2026-05-21T23:03:34.478Z",
+      "ended": "2026-05-21T23:37:17.307Z",
+      "reads": [
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/Backend/server.js",
+          "tokens_estimated": 0,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/index.html",
+          "tokens_estimated": 0,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/script.js",
+          "tokens_estimated": 43749,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/index.html",
+          "tokens_estimated": 352,
+          "action": "edit"
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/index.html",
+          "tokens_estimated": 314,
+          "action": "edit"
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/Backend/server.js",
+          "tokens_estimated": 818,
+          "action": "edit"
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/script.js",
+          "tokens_estimated": 848,
+          "action": "edit"
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/script.js",
+          "tokens_estimated": 99,
+          "action": "edit"
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/script.js",
+          "tokens_estimated": 6,
+          "action": "edit"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 43749,
+        "output_tokens_estimated": 2437,
+        "reads_count": 3,
+        "writes_count": 6,
+        "repeated_reads_blocked": 6,
+        "anatomy_lookups": 1
+      }
+    },
+    {
+      "id": "session-2026-05-21-2003",
+      "started": "2026-05-21T23:03:34.478Z",
+      "ended": "2026-05-21T23:37:43.945Z",
+      "reads": [
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/Backend/server.js",
+          "tokens_estimated": 0,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/index.html",
+          "tokens_estimated": 0,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/script.js",
+          "tokens_estimated": 43749,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/index.html",
+          "tokens_estimated": 352,
+          "action": "edit"
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/index.html",
+          "tokens_estimated": 314,
+          "action": "edit"
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/Backend/server.js",
+          "tokens_estimated": 818,
+          "action": "edit"
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/script.js",
+          "tokens_estimated": 848,
+          "action": "edit"
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/script.js",
+          "tokens_estimated": 99,
+          "action": "edit"
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/script.js",
+          "tokens_estimated": 6,
+          "action": "edit"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 43749,
+        "output_tokens_estimated": 2437,
+        "reads_count": 3,
+        "writes_count": 6,
+        "repeated_reads_blocked": 6,
+        "anatomy_lookups": 1
+      }
+    },
+    {
+      "id": "session-2026-05-21-2003",
+      "started": "2026-05-21T23:03:34.478Z",
+      "ended": "2026-05-21T23:38:44.476Z",
+      "reads": [
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/Backend/server.js",
+          "tokens_estimated": 0,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/index.html",
+          "tokens_estimated": 0,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/script.js",
+          "tokens_estimated": 43749,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/index.html",
+          "tokens_estimated": 352,
+          "action": "edit"
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/index.html",
+          "tokens_estimated": 314,
+          "action": "edit"
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/Backend/server.js",
+          "tokens_estimated": 818,
+          "action": "edit"
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/script.js",
+          "tokens_estimated": 848,
+          "action": "edit"
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/script.js",
+          "tokens_estimated": 99,
+          "action": "edit"
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/script.js",
+          "tokens_estimated": 6,
+          "action": "edit"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 43749,
+        "output_tokens_estimated": 2437,
+        "reads_count": 3,
+        "writes_count": 6,
+        "repeated_reads_blocked": 6,
+        "anatomy_lookups": 1
+      }
+    },
+    {
+      "id": "session-2026-05-22-2122",
+      "started": "2026-05-22T00:22:34.671Z",
+      "ended": "2026-05-22T00:34:13.780Z",
+      "reads": [
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/.wolf/anatomy.md",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [],
+      "totals": {
+        "input_tokens_estimated": 0,
+        "output_tokens_estimated": 0,
+        "reads_count": 1,
+        "writes_count": 0,
+        "repeated_reads_blocked": 0,
+        "anatomy_lookups": 0
+      }
+    },
+    {
+      "id": "session-2026-05-22-2122",
+      "started": "2026-05-22T00:22:34.671Z",
+      "ended": "2026-05-22T00:34:33.424Z",
+      "reads": [
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/.wolf/anatomy.md",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [],
+      "totals": {
+        "input_tokens_estimated": 0,
+        "output_tokens_estimated": 0,
+        "reads_count": 1,
+        "writes_count": 0,
+        "repeated_reads_blocked": 0,
+        "anatomy_lookups": 0
+      }
+    },
+    {
+      "id": "session-2026-05-22-2122",
+      "started": "2026-05-22T00:22:34.671Z",
+      "ended": "2026-05-22T00:35:26.534Z",
+      "reads": [
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/.wolf/anatomy.md",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/backend/.env",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [],
+      "totals": {
+        "input_tokens_estimated": 0,
+        "output_tokens_estimated": 0,
+        "reads_count": 2,
+        "writes_count": 0,
+        "repeated_reads_blocked": 0,
+        "anatomy_lookups": 0
+      }
+    },
+    {
+      "id": "session-2026-05-22-2122",
+      "started": "2026-05-22T00:22:34.671Z",
+      "ended": "2026-05-22T00:36:48.553Z",
+      "reads": [
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/.wolf/anatomy.md",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/backend/.env",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [],
+      "totals": {
+        "input_tokens_estimated": 0,
+        "output_tokens_estimated": 0,
+        "reads_count": 2,
+        "writes_count": 0,
+        "repeated_reads_blocked": 0,
+        "anatomy_lookups": 0
+      }
+    },
+    {
+      "id": "session-2026-05-22-2122",
+      "started": "2026-05-22T00:22:34.671Z",
+      "ended": "2026-05-22T00:38:01.333Z",
+      "reads": [
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/.wolf/anatomy.md",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/backend/.env",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [],
+      "totals": {
+        "input_tokens_estimated": 0,
+        "output_tokens_estimated": 0,
+        "reads_count": 2,
+        "writes_count": 0,
+        "repeated_reads_blocked": 0,
+        "anatomy_lookups": 0
+      }
+    },
+    {
+      "id": "session-2026-05-22-2122",
+      "started": "2026-05-22T00:22:34.671Z",
+      "ended": "2026-05-22T00:44:08.105Z",
+      "reads": [
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/.wolf/anatomy.md",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/backend/.env",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/backend/server.js",
+          "tokens_estimated": 11835,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/script.js",
+          "tokens_estimated": 43810,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/script.js",
+          "tokens_estimated": 28,
+          "action": "edit"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 55645,
+        "output_tokens_estimated": 28,
+        "reads_count": 4,
+        "writes_count": 1,
+        "repeated_reads_blocked": 0,
+        "anatomy_lookups": 2
+      }
+    },
+    {
+      "id": "session-2026-05-23-1734",
+      "started": "2026-05-23T20:34:39.198Z",
+      "ended": "2026-05-23T20:45:08.299Z",
+      "reads": [
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/index.html",
+          "tokens_estimated": 8112,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/style.css",
+          "tokens_estimated": 17338,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/index.html",
+          "tokens_estimated": 22,
+          "action": "edit"
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/index.html",
+          "tokens_estimated": 26,
+          "action": "edit"
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/style.css",
+          "tokens_estimated": 15,
+          "action": "edit"
+        },
+        {
+          "file": "c:/Users/Sharief/Downloads/MaKandra-/style.css",
+          "tokens_estimated": 246,
+          "action": "edit"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 25450,
+        "output_tokens_estimated": 309,
+        "reads_count": 2,
+        "writes_count": 4,
+        "repeated_reads_blocked": 2,
+        "anatomy_lookups": 2
       }
     }
   ],

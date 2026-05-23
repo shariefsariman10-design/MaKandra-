@@ -128,6 +128,54 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-21T23:05:58.152Z"
+    },
+    {
+      "id": "bug-009",
+      "timestamp": "2026-05-23T20:44:48.495Z",
+      "error_message": "Incorrect value in code",
+      "file": "index.html",
+      "root_cause": "Had \"mkdra.png\"",
+      "fix": "Changed to \"images/mkdra.png\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "html"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-05-23T20:44:52.634Z"
+    },
+    {
+      "id": "bug-010",
+      "timestamp": "2026-05-23T20:44:57.976Z",
+      "error_message": "Incorrect value in code",
+      "file": "style.css",
+      "root_cause": "Had 'background.jpeg'",
+      "fix": "Changed to 'images/background.jpeg'",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "css"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-23T20:44:57.976Z"
+    },
+    {
+      "id": "bug-011",
+      "timestamp": "2026-05-23T20:45:02.454Z",
+      "error_message": "CSS fix: background-image",
+      "file": "style.css",
+      "root_cause": "background-image: url('bouw.jpg') → url('images/bouw.jpg')",
+      "fix": "Changed background-image: url('bouw.jpg') → url('images/bouw.jpg')",
+      "tags": [
+        "auto-detected",
+        "style-fix",
+        "css"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-23T20:45:02.454Z"
     }
   ]
 }

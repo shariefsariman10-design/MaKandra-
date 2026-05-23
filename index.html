@@ -15,7 +15,7 @@
 <nav id="navbar">
   <div class="nav-container">
     <div class="nav-logo" onclick="showView('home')">
-      <img src="mkdra.png" alt="MaKandra Logo" class="nav-logo-img" />
+      <img src="images/mkdra.png" alt="MaKandra Logo" class="nav-logo-img" />
     </div>
     <div class="nav-links">
       <a class="nav-link klant-only" onclick="showView('browse')">Diensten</a>
@@ -295,7 +295,7 @@
       <div class="footer-grid">
         <div class="footer-brand">
           <div class="footer-logo">
-            <img src="mkdra.png" alt="MaKandra" style="height:100px;width:auto;" />
+            <img src="images/mkdra.png" alt="MaKandra" style="height:100px;width:auto;" />
           </div>
           <p>MaKandra staat voor samenwerking en vooruitgang. Wij geloven in persoonlijke service en duurzame relaties, zodat elke klant zich gehoord en geholpen voelt.</p>
           <div class="footer-flag">🇸🇷 Trots gemaakt in Suriname</div>
@@ -460,7 +460,7 @@
       <div class="form-error hidden" id="login-error"></div>
       <button class="btn-primary btn-full" onclick="handleLogin()">Inloggen</button>
       <p class="form-footer" style="margin-top:10px">
-        <a onclick="toggleForgotPassword()" style="cursor:pointer;color:#6c47ff;font-size:.85rem">Wachtwoord vergeten?</a>
+        <a onclick="toggleForgotPassword()" style="cursor:pointer;color:var(--accent);font-size:.85rem">Wachtwoord vergeten?</a>
       </p>
       <p class="form-footer">Nog geen account? <a onclick="switchAuthTab('signup')">Aanmelden</a></p>
 
@@ -667,8 +667,8 @@
       <div class="form-group">
         <label>Beoordeling — <strong><span id="review-pct-label">75%</span></strong></label>
         <input type="range" id="review-rating" min="0" max="100" value="75" step="1"
-               oninput="document.getElementById('review-pct-label').textContent=this.value+'%'"
-               style="width:100%;accent-color:#6c47ff;cursor:pointer;margin-top:6px" />
+               oninput="document.getElementById('review-pct-label').textContent=this.value+'%'; this.style.setProperty('--pct', this.value + '%')"
+               style="width:100%;cursor:pointer;margin-top:6px" />
         <div style="display:flex;justify-content:space-between;font-size:.72rem;color:#888;margin-top:2px"><span>0%</span><span>50%</span><span>100%</span></div>
       </div>
       <div class="form-group">

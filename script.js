@@ -386,7 +386,7 @@ async function loadHomeData() {
     allWorkers = await workersRes.json();
 
     const grid = document.getElementById('top-providers-grid');
-    if (grid) grid.innerHTML = allWorkers.slice(0, 6).map((w, i) => providerCard(w, i + 1)).join('');
+    if (grid) grid.innerHTML = allWorkers.slice(0, 10).map((w, i) => providerCard(w, i + 1)).join('');
 
     const cats = catsRes.ok ? await catsRes.json() : [];
     renderCategoryGrid(cats);
@@ -570,7 +570,7 @@ window.heroSearch = heroSearch;
 
 function providerCard(w, rank) {
   const favs      = getFavs();
-  const isFav     = favs.includes(w.id);
+  const isFav     = favs.includes(String(w.id));
   const price     = w.hourly_rate ? 'SRD ' + w.hourly_rate + '/u' : '';
   const rankBadge = rank && rank <= 3 ? '<span class="rank-badge">#' + rank + '</span>' : '';
   const scoreNum  = w.avg_score ? Math.round(w.avg_score) : null;
@@ -612,21 +612,22 @@ function providerCard(w, rank) {
 
 function getFavs() {
   if (!currentUser) return [];
-  return JSON.parse(localStorage.getItem('mkd_fav_' + currentUser.id) || '[]');
+  return (JSON.parse(localStorage.getItem('mkd_fav_' + currentUser.id) || '[]') || []).map(String);
 }
 
 function toggleFav(id, btn) {
+  const favId = String(id);
   let favs = getFavs();
   const isProfile = btn && btn.classList.contains('btn-fav-profile');
-  if (favs.includes(id)) {
-    favs = favs.filter(f => f !== id);
+  if (favs.includes(favId)) {
+    favs = favs.filter(f => f !== favId);
     if (btn) {
       btn.classList.remove('active');
       btn.innerHTML = isProfile ? '&#9825; Opslaan' : '&#9825;';
     }
     showToast('Verwijderd uit favorieten.', 'info');
   } else {
-    favs.push(id);
+    favs.push(favId);
     if (btn) {
       btn.classList.add('active');
       btn.innerHTML = isProfile ? '&#10084; Favoriet' : '&#10084;';
@@ -649,13 +650,13 @@ function renderFavoritesView() {
     el.innerHTML = '<div class="favorites-empty"><div class="favorites-empty-icon">&#9825;</div><p>Je hebt nog geen favorieten opgeslagen.</p></div>';
     return;
   }
-  const faved = allWorkers.filter(w => favs.includes(w.id));
+  const faved = allWorkers.filter(w => favs.includes(String(w.id)));
   if (faved.length === 0) {
     fetch(API + '/dienstverleners')
       .then(r => r.json())
       .then(ws => {
         allWorkers = ws;
-        const f2 = ws.filter(w => favs.includes(w.id));
+        const f2 = ws.filter(w => favs.includes(String(w.id)));
         el.innerHTML = f2.length
           ? f2.map(w => providerCard(w, 0)).join('')
           : '<div class="favorites-empty"><div class="favorites-empty-icon">&#9825;</div><p>Geen favorieten gevonden.</p></div>';
@@ -689,7 +690,7 @@ function _renderProfile(w) {
   if (!el) return;
 
   const favs     = getFavs();
-  const isFav    = favs.includes(w.id);
+  const isFav    = favs.includes(String(w.id));
   const canBook  = currentUser && currentUser.role === 'klant';
   const scoreNum = w.avg_score ? Math.round(w.avg_score) : 0;
   const availBadge = w.is_available === 0
@@ -1141,7 +1142,11 @@ function openReviewModal(providerId) {
   document.getElementById('review-text').value      = '';
   document.getElementById('review-error').textContent = '';
   const slider = document.getElementById('review-rating');
-  if (slider) { slider.value = 75; document.getElementById('review-pct-label').textContent = '75%'; }
+  if (slider) {
+    slider.value = 75;
+    slider.style.setProperty('--pct', '75%');
+    document.getElementById('review-pct-label').textContent = '75%';
+  }
   document.getElementById('review-overlay').classList.remove('hidden');
 }
 window.openReviewModal = openReviewModal;
