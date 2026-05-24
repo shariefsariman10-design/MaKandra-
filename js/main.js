@@ -1240,8 +1240,10 @@ async function pollNotifications() {
     const unread = notifs.filter(n => !n.is_read).length;
     const badge  = document.getElementById('notif-badge');
     const badge2 = document.getElementById('dropdown-notif-badge');
+    const badge3 = document.getElementById('dash-notif-badge');
     if (badge)  { badge.textContent  = unread; badge.classList.toggle('hidden',  unread === 0); }
     if (badge2) { badge2.textContent = unread; badge2.classList.toggle('hidden', unread === 0); }
+    if (badge3) { badge3.textContent = unread; badge3.classList.toggle('hidden', unread === 0); }
   } catch { /* silent */ }
 }
 
@@ -1272,7 +1274,7 @@ function renderDVDash(el) {
           '<div class="dash-menu-item" onclick="dvTab(\'boekingen\',this)">Boekingen</div>' +
           '<div class="dash-menu-item" onclick="dvTab(\'opdrachten\',this)">Opdrachten</div>' +
           '<div class="dash-menu-item" onclick="dvTab(\'agenda\',this)">Agenda</div>' +
-          '<div class="dash-menu-item" onclick="dvTab(\'notificaties\',this)">Notificaties</div>' +
+          '<div class="dash-menu-item" onclick="dvTab(\'notificaties\',this)">Notificaties <span id="dash-notif-badge" class="hidden" style="background:#e53e3e;color:#fff;border-radius:50%;padding:1px 6px;font-size:11px;margin-left:4px;"></span></div>' +
           '<div class="dash-menu-item" onclick="dvTab(\'portfolio\',this)">🖼️ Portfolio</div>' +
           '<div class="dash-menu-item" onclick="dvTab(\'profiel\',this)">Profiel bewerken</div>' +
           '<div class="dash-menu-item" onclick="dvTab(\'account\',this)">Account</div>' +
@@ -1285,9 +1287,9 @@ function renderDVDash(el) {
     '</div>';
 
   loadBookingsDV();
-  loadDVNotifications();
   renderCalendar();
   loadDVPortfolio();
+  pollNotifications();
 }
 
 function dvTab(panel, el) {
@@ -1413,10 +1415,11 @@ async function uploadPortfolioSlot(input) {
   const fd = new FormData();
   fd.append('file', file);
   try {
-    const r = await fetch(API + '/portfolio/' + currentUser.id, { method: 'POST', body: fd });
+    const r    = await fetch(API + '/portfolio/' + currentUser.id, { method: 'POST', body: fd });
+    const data = await r.json().catch(() => ({}));
     if (r.ok) { loadDVPortfolioTab(); showToast('Geüpload!', 'success'); }
-    else { showToast('Upload mislukt.', 'error'); loadDVPortfolioTab(); }
-  } catch { showToast('Verbindingsfout.', 'error'); loadDVPortfolioTab(); }
+    else { showToast(data.error || 'Upload mislukt (' + r.status + ').', 'error'); loadDVPortfolioTab(); }
+  } catch (e) { showToast('Verbindingsfout: ' + e.message, 'error'); loadDVPortfolioTab(); }
   input.value = '';
 }
 window.uploadPortfolioSlot = uploadPortfolioSlot;
@@ -1587,7 +1590,7 @@ function renderKlantDash(el) {
           '<div class="dash-menu-item" onclick="klantTab(\'opdrachten\',this)">Opdrachten</div>' +
           '<div class="dash-menu-item" onclick="klantTab(\'favorieten\',this)">Favorieten</div>' +
           '<div class="dash-menu-item" onclick="klantTab(\'reviews\',this)">Mijn reviews</div>' +
-          '<div class="dash-menu-item" onclick="klantTab(\'notificaties\',this)">Notificaties</div>' +
+          '<div class="dash-menu-item" onclick="klantTab(\'notificaties\',this)">Notificaties <span id="dash-notif-badge" class="hidden" style="background:#e53e3e;color:#fff;border-radius:50%;padding:1px 6px;font-size:11px;margin-left:4px;"></span></div>' +
           '<div class="dash-menu-item" onclick="klantTab(\'profiel\',this)">Mijn profiel</div>' +
           '<div class="dash-menu-item" onclick="klantTab(\'account\',this)">Account</div>' +
           (currentUser.is_admin ? '<div class="dash-menu-item" onclick="klantTab(\'admin\',this)">Beheer</div>' : '') +
@@ -1599,7 +1602,7 @@ function renderKlantDash(el) {
     '</div>';
 
   loadKlantOverzicht();
-  loadKlantNotifications();
+  pollNotifications();
 }
 
 function klantTab(panel, el) {
@@ -2189,6 +2192,25 @@ window.deletePortfolioItem = deletePortfolioItem;
 // NOTIFICATIONS (dashboard)
 // ─────────────────────────────────────────
 
+function _notifSource(msg) {
+  if (msg.startsWith('📅'))  return { label: '📋 Boekingen',     tab: 'boekingen',  color: '#4a90d9' };
+  if (msg.startsWith('✅'))  return { label: '📋 Boekingen',     tab: 'boekingen',  color: '#38a169' };
+  if (msg.startsWith('❌'))  return { label: '📋 Boekingen',     tab: 'boekingen',  color: '#e53e3e' };
+  if (msg.startsWith('💼'))  return { label: '💼 Opdrachten',    tab: 'opdrachten', color: '#805ad5' };
+  if (msg.startsWith('⭐') || msg.startsWith('🌟'))
+                              return { label: '⭐ Beoordelingen', tab: 'profiel',    color: '#d97706' };
+  return null;
+}
+
+function _goToDashTab(panel) {
+  const items = document.querySelectorAll('#dashboard-content .dash-menu-item');
+  for (const item of items) {
+    const oc = item.getAttribute('onclick') || '';
+    if (oc.includes("'" + panel + "'")) { item.click(); return; }
+  }
+}
+window._goToDashTab = _goToDashTab;
+
 async function loadDVNotifications() {
   const el = document.getElementById('dv-notif-list');
   if (el) await _renderNotifList(el);
@@ -2208,12 +2230,21 @@ async function _renderNotifList(el) {
 
     if (!notifs.length) { el.innerHTML = '<p class="empty-plain">Geen notificaties.</p>'; return; }
 
-    el.innerHTML = notifs.map(n =>
-      '<div class="notif-item' + (n.is_read ? '' : ' notif-unread') + '">' +
-        '<div>' + esc(n.message) + '</div>' +
-        '<small>' + new Date(n.created_at).toLocaleDateString('nl-NL') + '</small>' +
-      '</div>'
-    ).join('');
+    el.innerHTML = notifs.map(n => {
+      const src  = _notifSource(n.message);
+      const date = new Date(n.created_at);
+      const dateStr = date.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' });
+      const timeStr = date.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
+      const srcBadge = src
+        ? '<span class="notif-src-badge" style="background:' + src.color + '22;color:' + src.color + ';border:1px solid ' + src.color + '44">' + src.label + '</span>'
+        : '';
+      const clickAttr = src ? ' onclick="_goToDashTab(\'' + src.tab + '\')" style="cursor:pointer"' : '';
+      return '<div class="notif-item' + (n.is_read ? '' : ' notif-unread') + '"' + clickAttr + '>' +
+        srcBadge +
+        '<div class="notif-msg">' + esc(n.message) + '</div>' +
+        '<small>' + dateStr + ' · ' + timeStr + '</small>' +
+      '</div>';
+    }).join('');
   } catch { el.innerHTML = '<p>Fout bij laden notificaties.</p>'; }
 }
 
@@ -2694,9 +2725,12 @@ function injectDashCSS() {
     '.cal-today{border-color:var(--accent,#6c47ff);background:#f0ecff}',
     '.cal-day-num{font-size:.8rem;font-weight:600;margin-bottom:2px}',
     '.cal-event{background:var(--accent,#6c47ff);color:#fff;border-radius:4px;font-size:.7rem;padding:1px 4px;margin-bottom:2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}',
-    '.notif-item{padding:12px 0;border-bottom:1px solid #f0f0f0}',
-    '.notif-unread{font-weight:600}',
+    '.notif-item{padding:12px 0;border-bottom:1px solid #f0f0f0;transition:background .15s}',
+    '.notif-item[onclick]:hover{background:#f7f7fc;border-radius:8px;padding:12px 8px;margin:0 -8px}',
+    '.notif-unread .notif-msg{font-weight:600}',
     '.notif-item small{color:#aaa;font-size:.8rem}',
+    '.notif-msg{margin:4px 0 2px}',
+    '.notif-src-badge{display:inline-block;font-size:.72rem;font-weight:600;border-radius:20px;padding:1px 8px;margin-bottom:4px;letter-spacing:.01em}',
     '.empty-plain{color:#aaa;font-style:italic}',
     '@media(max-width:768px){.dashboard-grid{grid-template-columns:1fr}}',
     '.meta-score{background:#fff8e1;color:#b7791f;border-radius:20px;padding:2px 8px;font-size:.8rem;font-weight:600}',
@@ -2875,6 +2909,7 @@ function injectDashCSS() {
     'body.dark-mode .form-group label{color:#c0c0d8!important}',
     'body.dark-mode .booking-item{border-color:#2a2a40!important}',
     'body.dark-mode .notif-item{border-color:#2a2a40!important}',
+    'body.dark-mode .notif-item[onclick]:hover{background:#1e1e35!important}',
     'body.dark-mode .avail-toggle-card{background:#0d2818!important}',
     'body.dark-mode .dnd-toggle-card{background:#2a1010!important;border-color:#4a2020!important}',
     'body.dark-mode .cv-sidebar{background:#111126!important}',

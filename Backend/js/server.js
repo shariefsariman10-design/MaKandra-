@@ -7,12 +7,12 @@ import fs from 'fs';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
 import { fileURLToPath } from 'url';
-import { db } from './config/db.js';
+import { db } from '../config/db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ── Ensure uploads directory exists ──────────────────────────────────────────
-const uploadsDir = path.join(__dirname, 'uploads');
+const uploadsDir = path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
   console.log('Created uploads directory:', uploadsDir);
@@ -21,10 +21,10 @@ if (!fs.existsSync(uploadsDir)) {
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.join(__dirname, 'uploads')),
+  destination: (req, file, cb) => cb(null, path.join(__dirname, '../uploads')),
   filename:    (req, file, cb) => cb(null, 'avatar-' + req.params.id + path.extname(file.originalname)),
 });
 const upload = multer({ storage, limits: { fileSize: 2 * 1024 * 1024 }, fileFilter: (req, file, cb) => {
@@ -911,7 +911,7 @@ app.post('/upload/avatar/:id', upload.single('avatar'), async (req, res) => {
 // ─────────────────────────────────────────
 
 const portfolioStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.join(__dirname, 'uploads')),
+  destination: (req, file, cb) => cb(null, path.join(__dirname, '../uploads')),
   filename:    (req, file, cb) => cb(null, 'portfolio-' + req.params.userId + '-' + Date.now() + path.extname(file.originalname)),
 });
 const uploadPortfolio = multer({
