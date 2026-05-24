@@ -328,7 +328,12 @@
       "file": "script.js",
       "root_cause": "All three auth-form buttons had both onclick= HTML attribute AND a duplicate addEventListener call in DOMContentLoaded. Every click fired handleSignup()/handleLogin()/handleProviderSignup() TWICE simultaneously. First call inserted the user (201 OK); second call hit ER_DUP_ENTRY and returned 400 'Dit e-mailadres is al in gebruik'.",
       "fix": "Removed lines 42-44 from script.js (addEventListener for #tab-login, #tab-signup, #tab-provider .btn-primary). The inline onclick= attributes in index.html are sufficient.",
-      "tags": ["signup", "double-submission", "event-listener", "duplicate-fetch"],
+      "tags": [
+        "signup",
+        "double-submission",
+        "event-listener",
+        "duplicate-fetch"
+      ],
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-24T00:00:00.000Z"
@@ -340,8 +345,17 @@
       "file": "backend/server.js",
       "root_cause": "The DB init block in server.js created portfolio, messages, jobs, job_responses but omitted bookings, reviews, and notifications. Any query against those tables caused ER_NO_SUCH_TABLE at runtime.",
       "fix": "Added CREATE TABLE IF NOT EXISTS for bookings, reviews, and notifications (with proper indexes) at the top of the DB init block — before portfolio and messages so dependencies are always satisfied. Also created backend/migrations/001_create_missing_tables.sql for manual runs.",
-      "tags": ["database", "missing-table", "bookings", "reviews", "notifications", "migration"],
-      "related_bugs": ["bug-023"],
+      "tags": [
+        "database",
+        "missing-table",
+        "bookings",
+        "reviews",
+        "notifications",
+        "migration"
+      ],
+      "related_bugs": [
+        "bug-023"
+      ],
       "occurrences": 1,
       "last_seen": "2026-05-24T00:00:00.000Z"
     },
@@ -352,8 +366,15 @@
       "file": "script.js",
       "root_cause": "Two problems: (1) reviews table did not exist so INSERT returned 500. (2) submitReview() set errEl.textContent but never removed the 'hidden' CSS class, so no error was ever visible to the user.",
       "fix": "Added reviews table to DB init (see bug-022). In submitReview(), added errEl.classList.remove('hidden') at the start and errEl.classList.add('hidden') on the success path. In openReviewModal(), added errEl.classList.add('hidden') to reset state when modal opens.",
-      "tags": ["reviews", "form-error", "hidden-class", "submit"],
-      "related_bugs": ["bug-022"],
+      "tags": [
+        "reviews",
+        "form-error",
+        "hidden-class",
+        "submit"
+      ],
+      "related_bugs": [
+        "bug-022"
+      ],
       "occurrences": 1,
       "last_seen": "2026-05-24T00:00:00.000Z"
     },
@@ -364,10 +385,128 @@
       "file": "backend/server.js",
       "root_cause": "The backend/uploads/ directory was never created. Multer tried to write avatar files into a non-existent directory and crashed with ENOENT.",
       "fix": "Added import fs from 'fs' and fs.mkdirSync(uploadsDir, { recursive: true }) immediately after __dirname is defined. The directory is now auto-created on every server start if missing. Both avatar and portfolio uploads use the same directory.",
-      "tags": ["uploads", "multer", "ENOENT", "missing-directory", "profile-picture"],
+      "tags": [
+        "uploads",
+        "multer",
+        "ENOENT",
+        "missing-directory",
+        "profile-picture"
+      ],
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-24T00:00:00.000Z"
+    },
+    {
+      "id": "bug-025",
+      "timestamp": "2026-05-24T12:17:32.323Z",
+      "error_message": "Significant refactor of ",
+      "file": "backend/server.js",
+      "root_cause": "16 lines replaced/restructured",
+      "fix": "Rewrote 53→90 lines (16 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-24T12:17:32.323Z"
+    },
+    {
+      "id": "bug-026",
+      "timestamp": "2026-05-24T12:18:42.045Z",
+      "error_message": "Null/undefined access in ",
+      "file": "backend/server.js",
+      "root_cause": "Property access on potentially null/undefined value",
+      "fix": "Added null safety (optional chaining or null check)",
+      "tags": [
+        "auto-detected",
+        "null-safety",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-24T12:18:42.045Z"
+    },
+    {
+      "id": "bug-027",
+      "timestamp": "2026-05-24T12:22:58.144Z",
+      "error_message": "Missing guard clause",
+      "file": "backend/server.js",
+      "root_cause": "No early return/throw for edge case: !displayName",
+      "fix": "Added guard clause: if (!displayName)",
+      "tags": [
+        "auto-detected",
+        "guard-clause",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-05-24T12:23:26.186Z"
+    },
+    {
+      "id": "bug-028",
+      "timestamp": "2026-05-24T12:24:50.544Z",
+      "error_message": "Significant refactor of ",
+      "file": "backend/server.js",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 24→44 lines (3 removed) | Also: total_clients:     stats.total_clients     || 0,; returning_clients: ret.returning_clients   || 0,",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-05-24T12:25:24.955Z"
+    },
+    {
+      "id": "bug-029",
+      "timestamp": "2026-05-24T12:28:46.107Z",
+      "error_message": "Incorrect value in code",
+      "file": "script.js",
+      "root_cause": "Had ', headers: ct(), body: JSON.stringify({ name, ema",
+      "fix": "Changed to ', headers: ct(), body: JSON.stringify({ first_nam",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 4,
+      "last_seen": "2026-05-24T12:33:58.095Z"
+    },
+    {
+      "id": "bug-030",
+      "timestamp": "2026-05-24T12:29:36.838Z",
+      "error_message": "Null/undefined access in ",
+      "file": "script.js",
+      "root_cause": "Property access on potentially null/undefined value",
+      "fix": "Added null safety (optional chaining or null check) | Also: const favs        = getFavs();; const isFav       = favs.includes(String(w.id)); | Also: (w.vertrouwenscore != null ? '<div class=\"info-row\"><span>Ve; (avgScore ? '<div class=\"info-row\"><span>Beoordelingsscore</ | Also: const set    = (id, val) => { const el = document.getElement; const setBar = (id, pct) => { const el = document.getElement | Also: const first_name    = document.getElementById('dv-firstname'; const last_name     = document.getElementById('dv-lastname')",
+      "tags": [
+        "auto-detected",
+        "null-safety",
+        "js"
+      ],
+      "related_bugs": [],
+      "occurrences": 5,
+      "last_seen": "2026-05-24T12:38:13.076Z"
+    },
+    {
+      "id": "bug-031",
+      "timestamp": "2026-05-24T12:40:43.989Z",
+      "error_message": "Wrong reference: Beoordeling should be Beoordelingsscore",
+      "file": "index.html",
+      "root_cause": "Used \"Beoordeling\" instead of \"Beoordelingsscore\"",
+      "fix": "Changed Beoordeling → Beoordelingsscore",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "html"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-24T12:40:43.989Z"
     }
   ]
 }

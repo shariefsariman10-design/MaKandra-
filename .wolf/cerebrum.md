@@ -30,6 +30,18 @@
 
 [2026-05-24] **Multer upload destination directory must be created programmatically.** If `backend/uploads/` doesn't exist, Multer throws ENOENT. Use `fs.mkdirSync(uploadsDir, { recursive: true })` at server startup — never assume the directory already exists.
 
+[2026-05-24] **Vertrouwenscore ≠ avg_score.** VS is a composite trust score (clients+reviews formula). avg_score is the arithmetic mean of review slider values (1-100). They are two separate fields; never conflate them. VS shows in score ring + badge; avg_score shows in "Beoordelingsscore" bar only.
+
+[2026-05-24] **`buildUserPayload(u)` helper exists.** All user-shape responses (signup, login) must go through this helper to ensure first_name, last_name, role_id are always included.
+
+[2026-05-24] **Dashboard form IDs changed.** DV profile: `dv-name` → `dv-firstname` + `dv-lastname`. Klant profile: `kl-name` → `kl-firstname` + `kl-lastname`. Validation message changed to "Voornaam is verplicht." (not "Naam is verplicht.").
+
 ## Decision Log
 
-<!-- Significant technical decisions with rationale. Why X was chosen over Y. -->
+[2026-05-24] **Vertrouwenscore formula:** VS = MIN(100, MIN(60, clients×3) + MIN(40, reviews×4)). Clients contribute 60 pts max (cap at 20), reviews 40 pts max (cap at 10). Computed server-side in both /dienstverleners and /provider-stats. Frontend uses `w.vertrouwenscore`; avg_score is kept separately as the "Beoordelingsscore".
+
+[2026-05-24] **Backward-compat name field:** `name` column is kept and auto-derived from first_name + last_name. All auth responses include all three fields. Frontend falls back to splitting `name` when `first_name` is null (for users created before migration).
+
+[2026-05-24] **Normalization is additive.** provider_profiles table is created alongside users, not replacing it. users.category etc. remain as the read-source to avoid a full query rewrite in this sprint. Future sprint should drop the redundant columns after migrating all reads.
+
+[2026-05-24] **Role system is dual-track.** role (VARCHAR) kept for backward compat; role_id (FK to roles) added alongside. All signup/update paths set both. requireAdmin still uses is_admin flag but role_id lays groundwork for RBAC expansion.

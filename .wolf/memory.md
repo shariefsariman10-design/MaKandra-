@@ -259,3 +259,34 @@
 | 08:24 | Created backend/migrations/001_create_missing_tables.sql | — | ~495 |
 | 00:00 | Fixed 4 HIGH-PRIORITY bugs: signup double-submit, missing bookings/reviews/notifications tables, review error visibility, uploads dir ENOENT | script.js, backend/server.js, backend/migrations/001_create_missing_tables.sql | all fixed | ~3200 |
 | 08:34 | Session end: 6 writes across 3 files (script.js, server.js, 001_create_missing_tables.sql) | 7 reads | ~62638 tok |
+| 09:15 | Created backend/migrations/002_separate_names.sql | — | ~265 |
+| 09:16 | Created backend/migrations/003_normalize_users.sql | — | ~867 |
+| 09:16 | Created backend/migrations/004_user_roles.sql | — | ~673 |
+| 09:17 | Edited backend/server.js | added 1 condition(s) | ~1111 |
+| 09:18 | Edited backend/server.js | added nullish coalescing | ~276 |
+| 09:22 | Edited backend/server.js | removed 20 lines | ~28 |
+| 09:22 | Edited backend/server.js | modified catch() | ~462 |
+| 09:23 | Edited backend/server.js | modified catch() | ~213 |
+| 09:24 | Edited backend/server.js | modified if() | ~513 |
+| 09:25 | Edited backend/server.js | modified catch() | ~355 |
+| 09:26 | Edited backend/server.js | modified for() | ~1200 |
+| 09:28 | Edited script.js | 4→4 lines | ~87 |
+| 09:28 | Edited script.js | 3→3 lines | ~94 |
+| 09:29 | Edited script.js | inline fix | ~31 |
+| 09:29 | Edited script.js | round() → score() | ~136 |
+| 09:30 | Edited script.js | inline fix | ~53 |
+| 09:30 | Edited script.js | modified round() | ~140 |
+| 09:31 | Edited script.js | 3→3 lines | ~32 |
+| 09:33 | Edited script.js | 12→15 lines | ~468 |
+| 09:33 | Edited script.js | inline fix | ~35 |
+| 09:34 | Edited script.js | 2→3 lines | ~130 |
+| 09:36 | Edited script.js | modified _loadProviderStats() | ~289 |
+| 09:36 | Edited script.js | 2→3 lines | ~57 |
+| 09:36 | Edited script.js | modified join() | ~134 |
+| 09:38 | Edited script.js | added optional chaining | ~547 |
+| 09:38 | Edited script.js | modified join() | ~134 |
+| 09:39 | Edited script.js | modified saveKlantProfile() | ~387 |
+| 09:40 | Edited index.html | 2→2 lines | ~32 |
+| 09:40 | Edited index.html | inline fix | ~28 |
+| 00:01 | Issues 6-10: VS formula, Beoordelingsscore rename, first/last names, provider_profiles, roles/user_roles tables | backend/server.js, script.js, index.html, migrations/002-004 | completed | ~5800 |
+| 09:43 | Session end: 35 writes across 7 files (script.js, server.js, 001_create_missing_tables.sql, 002_separate_names.sql, 003_normalize_users.sql) | 8 reads | ~71548 tok |

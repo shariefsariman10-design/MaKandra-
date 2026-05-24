@@ -216,7 +216,7 @@ async function handleSignup() {
 
   const name = lastName ? firstName + ' ' + lastName : firstName;
   try {
-    const r    = await fetch(API + '/signup', { method: 'POST', headers: ct(), body: JSON.stringify({ name, email, password, role: 'klant', buurt }) });
+    const r    = await fetch(API + '/signup', { method: 'POST', headers: ct(), body: JSON.stringify({ first_name: firstName, last_name: lastName, name, email, password, role: 'klant', buurt }) });
     const data = await r.json();
     if (!r.ok) { errEl.textContent = data.error; return; }
     errEl.classList.add('hidden');
@@ -257,7 +257,7 @@ async function handleProviderSignup() {
 
   const name = lastName ? firstName + ' ' + lastName : firstName;
   try {
-    const r    = await fetch(API + '/signup', { method: 'POST', headers: ct(), body: JSON.stringify({ name, email, password, role: 'dienstverlener', buurt, category, bio, hourly_rate, phone, working_hours }) });
+    const r    = await fetch(API + '/signup', { method: 'POST', headers: ct(), body: JSON.stringify({ first_name: firstName, last_name: lastName, name, email, password, role: 'dienstverlener', buurt, category, bio, hourly_rate, phone, working_hours }) });
     const data = await r.json();
     if (!r.ok) { errEl.textContent = data.error; return; }
     errEl.classList.add('hidden');
@@ -474,7 +474,7 @@ function applyFilters() {
   if (sort === 'price-asc')  filtered.sort((a, b) => (a.hourly_rate || 0) - (b.hourly_rate || 0));
   if (sort === 'price-desc') filtered.sort((a, b) => (b.hourly_rate || 0) - (a.hourly_rate || 0));
   if (sort === 'name')       filtered.sort((a, b) => a.name.localeCompare(b.name));
-  if (sort === 'score')      filtered.sort((a, b) => (b.avg_score || 0) - (a.avg_score || 0));
+  if (sort === 'score')      filtered.sort((a, b) => (b.vertrouwenscore || 0) - (a.vertrouwenscore || 0));
   if (sort === 'reviews')    filtered.sort((a, b) => (b.review_count || 0) - (a.review_count || 0));
 
   const grid  = document.getElementById('browse-grid');
@@ -571,7 +571,8 @@ function providerCard(w, rank) {
   const isFav     = favs.includes(String(w.id));
   const price     = w.hourly_rate ? 'SRD ' + w.hourly_rate + '/u' : '';
   const rankBadge = rank && rank <= 3 ? '<span class="rank-badge">#' + rank + '</span>' : '';
-  const scoreNum  = w.avg_score ? Math.round(w.avg_score) : null;
+  // vertrouwenscore is the composite trust score (clients + reviews formula)
+  const vsNum     = (w.vertrouwenscore != null) ? w.vertrouwenscore : null;
   const rc        = w.review_count || 0;
   const availDot  = w.is_available === 0
     ? ' <span class="avail-dot busy" title="Bezet"></span>'
@@ -589,7 +590,7 @@ function providerCard(w, rank) {
       '<div class="provider-avatar" style="background:' + avatarColor(w.name) + ';color:#fff">' +
         (w.profile_picture ? '<img src="' + API + w.profile_picture + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover">' : ini(w.name)) +
       '</div>' +
-      (scoreNum !== null ? '<div class="pcard-score-badge"><span class="pcard-score-num">' + scoreNum + '</span><span class="pcard-review-cnt"> (' + rc + ')</span></div>' : '') +
+      (vsNum !== null ? '<div class="pcard-score-badge" title="Vertrouwensscore"><span class="pcard-score-num">' + vsNum + '</span><span class="pcard-review-cnt">%</span></div>' : '') +
     '</div>' +
     '<div class="provider-card-body">' +
       '<div class="provider-name">' + esc(w.name) + availDot + '</div>' +
@@ -691,10 +692,13 @@ function _renderProfile(w) {
   const el = document.getElementById('profile-content');
   if (!el) return;
 
-  const favs     = getFavs();
-  const isFav    = favs.includes(String(w.id));
-  const canBook  = currentUser && currentUser.role === 'klant';
-  const scoreNum = w.avg_score ? Math.round(w.avg_score) : 0;
+  const favs        = getFavs();
+  const isFav       = favs.includes(String(w.id));
+  const canBook     = currentUser && currentUser.role === 'klant';
+  // vsScore  — composite Vertrouwensscore used in the header ring and trust bar
+  // avgScore — average review rating, shown separately as Beoordelingsscore
+  const vsScore  = w.vertrouwenscore != null ? w.vertrouwenscore : 0;
+  const avgScore = w.avg_score       ? Math.round(w.avg_score)   : 0;
   const availBadge = w.is_available === 0
     ? '<span class="prof-avail-badge busy">Bezet</span>'
     : '<span class="prof-avail-badge">Beschikbaar</span>';
@@ -733,7 +737,7 @@ function _renderProfile(w) {
           '</div>' +
           '<div class="profile-header-side">' +
             '<div class="profile-score-big">' +
-              buildScoreLarge(scoreNum) +
+              buildScoreLarge(vsScore) +
             '</div>' +
             (currentUser ? '<button class="btn-contact" onclick="openChat(' + w.id + ',\'' + esc(w.name) + '\',\'' + esc(w.profile_picture || '') + '\')">💬 Stuur bericht</button>' : '') +
           '</div>' +
@@ -754,11 +758,14 @@ function _renderProfile(w) {
           '<div class="profile-section-title">🥇 Vertrouwensscore</div>' +
           '<div class="trust-stats">' +
             '<div class="trust-stat-box"><div class="ts-icon">👥</div><div class="ts-num" id="ts-clients">—</div><div class="ts-label">Totale klanten</div></div>' +
-            '<div class="trust-stat-box"><div class="ts-icon">🔄</div><div class="ts-num" id="ts-returning">—</div><div class="ts-label">Terugkerende klanten</div></div>' +
             '<div class="trust-stat-box"><div class="ts-icon">⭐</div><div class="ts-num">' + (w.review_count || '—') + '</div><div class="ts-label">Beoordelingen</div></div>' +
+            '<div class="trust-stat-box"><div class="ts-icon">🔄</div><div class="ts-num" id="ts-returning">—</div><div class="ts-label">Terugkerende klanten</div></div>' +
           '</div>' +
           '<div class="trust-bars">' +
-            '<div class="trust-bar-row"><span>Beoordelingen score</span><div class="trust-bar"><div class="trust-bar-fill" style="width:' + scoreNum + '%"></div></div><span>' + scoreNum + '%</span></div>' +
+            /* Vertrouwensscore bar — computed from clients + reviews */
+            '<div class="trust-bar-row"><span>Vertrouwensscore</span><div class="trust-bar"><div class="trust-bar-fill" id="tb-vs" style="width:' + vsScore + '%"></div></div><span id="tbl-vs">' + vsScore + '%</span></div>' +
+            /* Beoordelingsscore bar — average of review scores (issue 7 rename) */
+            '<div class="trust-bar-row"><span>Beoordelingsscore</span><div class="trust-bar"><div class="trust-bar-fill tb-orange" id="tb-rating" style="width:' + avgScore + '%"></div></div><span>' + (avgScore || '—') + (avgScore ? '%' : '') + '</span></div>' +
             '<div class="trust-bar-row"><span>Terugkerende klanten</span><div class="trust-bar"><div class="trust-bar-fill tb-blue" id="tb-returning" style="width:0%"></div></div><span id="tbl-returning">—</span></div>' +
           '</div>' +
         '</div>' +
@@ -777,7 +784,7 @@ function _renderProfile(w) {
           '<div class="profile-section-title">Beoordelingen (' + (w.review_count || 0) + ')</div>' +
           '<div id="reviews-list"><p style="color:#aaa">Laden...</p></div>' +
           (currentUser && currentUser.role === 'klant'
-            ? '<button class="btn-add-review" onclick="openReviewModal(' + w.id + ')">✏️ Beoordeling schrijven</button>'
+            ? '<button class="btn-add-review" onclick="openReviewModal(' + w.id + ')">✏️ Beoordelingsscore geven</button>'
             : '') +
         '</div>' +
 
@@ -791,7 +798,8 @@ function _renderProfile(w) {
           '<div class="info-row"><span>Klanten</span><span id="di-clients">—</span></div>' +
           '<div class="info-row"><span>Terugkerende</span><span id="di-returning">—</span></div>' +
           '<div class="info-row"><span>Beoordelingen</span><span>' + (w.review_count || '—') + '</span></div>' +
-          (w.avg_score ? '<div class="info-row"><span>Score</span><span style="color:var(--primary);font-weight:700">' + scoreNum + '%</span></div>' : '') +
+          (w.vertrouwenscore != null ? '<div class="info-row"><span>Vertrouwensscore</span><span style="color:var(--primary);font-weight:700">' + vsScore + '%</span></div>' : '') +
+          (avgScore ? '<div class="info-row"><span>Beoordelingsscore</span><span style="color:#ea580c;font-weight:700">' + avgScore + '%</span></div>' : '') +
           (w.hourly_rate ? '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)"><div style="font-size:1.4rem;font-weight:800;color:var(--primary)">SRD ' + w.hourly_rate + '/uur</div><div style="font-size:.75rem;color:#888">Indicatief tarief</div></div>' : '') +
         '</div>' +
         (w.email || w.phone
@@ -866,17 +874,24 @@ async function _loadProviderStats(providerId) {
     const r = await fetch(API + '/provider-stats/' + providerId);
     if (!r.ok) return;
     const s = await r.json();
-    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    const set    = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    const setBar = (id, pct) => { const el = document.getElementById(id); if (el) el.style.width = pct + '%'; };
+
     set('ts-clients',   s.total_clients);
     set('ts-returning', s.returning_clients);
     set('di-clients',   s.total_clients);
     set('di-returning', s.returning_clients);
+
+    // Update VS bar with authoritative backend-computed value
+    const vs = s.vertrouwenscore != null ? s.vertrouwenscore : 0;
+    setBar('tb-vs',    vs);
+    set('tbl-vs',      vs + '%');
+
+    // Returning-clients bar
     if (s.total_clients > 0) {
       const pct = Math.round(s.returning_clients / s.total_clients * 100);
-      const bar = document.getElementById('tb-returning');
-      const lbl = document.getElementById('tbl-returning');
-      if (bar) bar.style.width = pct + '%';
-      if (lbl) lbl.textContent = pct + '%';
+      setBar('tb-returning', pct);
+      set('tbl-returning',   pct + '%');
     }
   } catch { /* silent */ }
 }
@@ -1458,7 +1473,10 @@ function _dvProfiel() {
     '<input type="file" id="dv-avatar" accept="image/*" style="display:none" onchange="uploadAvatarFor(\'dv\')">' +
     '<div class="form-error" id="dv-avatar-msg"></div>' +
     '</div>' +
-    '<div class="form-group"><label>Naam</label><input type="text" id="dv-name" value="' + esc(currentUser.name) + '"></div>' +
+    '<div class="form-row-2">' +
+      '<div class="form-group"><label>Voornaam</label><input type="text" id="dv-firstname" value="' + esc(currentUser.first_name || currentUser.name.split(' ')[0] || '') + '"></div>' +
+      '<div class="form-group"><label>Achternaam</label><input type="text" id="dv-lastname" value="' + esc(currentUser.last_name || (currentUser.name.includes(' ') ? currentUser.name.split(' ').slice(1).join(' ') : '')) + '"></div>' +
+    '</div>' +
     '<div class="form-group"><label>Categorie</label><input type="text" id="dv-cat" value="' + esc(currentUser.category || '') + '"></div>' +
     '<div class="form-group"><label>Ervaring</label><input type="text" id="dv-exp" value="' + esc(currentUser.experience || '') + '"></div>' +
     '<div class="form-group"><label>Bio</label><textarea id="dv-bio" rows="4">' + esc(currentUser.bio || '') + '</textarea></div>' +
@@ -1746,7 +1764,10 @@ function _klantProfiel() {
     '<input type="file" id="kl-avatar" accept="image/*" style="display:none" onchange="uploadAvatarFor(\'kl\')">' +
     '<div class="form-error" id="kl-avatar-msg"></div>' +
     '</div>' +
-    '<div class="form-group"><label>Naam</label><input type="text" id="kl-name" value="' + esc(currentUser.name) + '"></div>' +
+    '<div class="form-row-2">' +
+      '<div class="form-group"><label>Voornaam</label><input type="text" id="kl-firstname" value="' + esc(currentUser.first_name || currentUser.name.split(' ')[0] || '') + '"></div>' +
+      '<div class="form-group"><label>Achternaam</label><input type="text" id="kl-lastname" value="' + esc(currentUser.last_name || (currentUser.name.includes(' ') ? currentUser.name.split(' ').slice(1).join(' ') : '')) + '"></div>' +
+    '</div>' +
     '<div class="form-group">' +
       '<label>Over mij <span style="color:#aaa;font-size:.8rem;font-weight:400">(optioneel)</span></label>' +
       '<textarea id="kl-bio" rows="4" placeholder="Vertel iets over jezelf...">' + esc(currentUser.bio || '') + '</textarea>' +
@@ -1757,16 +1778,21 @@ function _klantProfiel() {
 }
 
 async function saveKlantProfile() {
-  const name  = document.getElementById('kl-name')?.value.trim();
-  const bio   = document.getElementById('kl-bio')?.value.trim() || null;
-  const msgEl = document.getElementById('kl-prof-msg');
-  if (!name) { msgEl.style.color = ''; msgEl.textContent = 'Naam is verplicht.'; return; }
+  const first_name = document.getElementById('kl-firstname')?.value.trim() || '';
+  const last_name  = document.getElementById('kl-lastname')?.value.trim()  || '';
+  const name       = last_name ? first_name + ' ' + last_name : first_name;
+  const bio        = document.getElementById('kl-bio')?.value.trim() || null;
+  const msgEl      = document.getElementById('kl-prof-msg');
+
+  if (!first_name) { msgEl.style.color = ''; msgEl.textContent = 'Voornaam is verplicht.'; return; }
   try {
-    const r = await fetch(API + '/klant-profile/' + currentUser.id, { method: 'PUT', headers: ct(), body: JSON.stringify({ name, bio }) });
+    const r = await fetch(API + '/klant-profile/' + currentUser.id, {
+      method: 'PUT', headers: ct(),
+      body: JSON.stringify({ first_name, last_name: last_name || null, name, bio }),
+    });
     const data = await r.json();
     if (!r.ok) { msgEl.style.color = ''; msgEl.textContent = data.error; return; }
-    currentUser.name = name;
-    currentUser.bio  = bio;
+    Object.assign(currentUser, { first_name, last_name: last_name || null, name, bio });
     localStorage.setItem('mkd_user', JSON.stringify(currentUser));
     msgEl.style.color = 'green';
     msgEl.textContent = 'Profiel opgeslagen!';
@@ -2241,7 +2267,9 @@ async function renderCalendar() {
 // ─────────────────────────────────────────
 
 async function saveProfile() {
-  const name          = document.getElementById('dv-name').value.trim();
+  const first_name    = document.getElementById('dv-firstname')?.value.trim() || '';
+  const last_name     = document.getElementById('dv-lastname')?.value.trim()  || '';
+  const name          = last_name ? first_name + ' ' + last_name : first_name;
   const category      = document.getElementById('dv-cat').value.trim();
   const experience    = document.getElementById('dv-exp').value.trim();
   const bio           = document.getElementById('dv-bio').value.trim();
@@ -2251,15 +2279,17 @@ async function saveProfile() {
   const working_hours = _schedPickerVal('dv');
   const msgEl         = document.getElementById('dv-prof-msg');
 
+  if (!first_name) { msgEl.style.color = ''; msgEl.textContent = 'Voornaam is verplicht.'; return; }
+
   try {
     const r = await fetch(API + '/profile/' + currentUser.id, {
       method: 'PUT', headers: ct(),
-      body: JSON.stringify({ name, category, experience, bio, hourly_rate: hourly_rate || null, buurt, phone: phone || null, working_hours: working_hours || null }),
+      body: JSON.stringify({ first_name, last_name: last_name || null, name, category, experience, bio, hourly_rate: hourly_rate || null, buurt, phone: phone || null, working_hours: working_hours || null }),
     });
     const data = await r.json();
     if (!r.ok) { msgEl.textContent = data.error; return; }
 
-    Object.assign(currentUser, { name, category, experience, bio, hourly_rate, buurt, phone, working_hours });
+    Object.assign(currentUser, { first_name, last_name: last_name || null, name, category, experience, bio, hourly_rate, buurt, phone, working_hours });
     localStorage.setItem('mkd_user', JSON.stringify(currentUser));
     msgEl.style.color = 'green';
     msgEl.textContent = 'Profiel opgeslagen!';
@@ -2733,6 +2763,7 @@ function injectDashCSS() {
     '.trust-bar{flex:1;height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden}',
     '.trust-bar-fill{height:100%;background:#22c55e;border-radius:4px;transition:width .5s}',
     '.trust-bar-fill.tb-blue{background:#3b82f6}',
+    '.trust-bar-fill.tb-orange{background:#ea580c}',
     '.trust-bar-row>span:last-child{min-width:34px;text-align:right;font-weight:600;font-size:.8rem}',
     '.trust-hours{display:inline-flex;align-items:center;gap:6px;background:#f0fdf4;color:#166534;border-radius:20px;padding:5px 13px;font-size:.82rem}',
     '.vaardigheden-tags{display:flex;flex-wrap:wrap;gap:8px}',

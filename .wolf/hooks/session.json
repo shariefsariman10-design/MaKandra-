@@ -23,7 +23,7 @@
       "first_read": "2026-05-24T11:15:19.597Z"
     },
     "c:/MaKandra-/script.js": {
-      "count": 4,
+      "count": 9,
       "tokens": 47780,
       "first_read": "2026-05-24T11:15:49.984Z"
     },
@@ -36,6 +36,11 @@
       "count": 1,
       "tokens": 0,
       "first_read": "2026-05-24T11:28:36.885Z"
+    },
+    "c:/MaKandra-/index.html": {
+      "count": 1,
+      "tokens": 0,
+      "first_read": "2026-05-24T12:12:57.442Z"
     }
   },
   "files_written": [
@@ -74,16 +79,194 @@
       "action": "create",
       "tokens": 531,
       "at": "2026-05-24T11:24:47.930Z"
+    },
+    {
+      "file": "c:/MaKandra-/backend/migrations/002_separate_names.sql",
+      "action": "create",
+      "tokens": 284,
+      "at": "2026-05-24T12:15:29.488Z"
+    },
+    {
+      "file": "c:/MaKandra-/backend/migrations/003_normalize_users.sql",
+      "action": "create",
+      "tokens": 928,
+      "at": "2026-05-24T12:16:08.679Z"
+    },
+    {
+      "file": "c:/MaKandra-/backend/migrations/004_user_roles.sql",
+      "action": "create",
+      "tokens": 721,
+      "at": "2026-05-24T12:16:30.349Z"
+    },
+    {
+      "file": "c:/MaKandra-/backend/server.js",
+      "action": "edit",
+      "tokens": 1111,
+      "at": "2026-05-24T12:17:32.313Z"
+    },
+    {
+      "file": "c:/MaKandra-/backend/server.js",
+      "action": "edit",
+      "tokens": 276,
+      "at": "2026-05-24T12:18:42.039Z"
+    },
+    {
+      "file": "c:/MaKandra-/backend/server.js",
+      "action": "edit",
+      "tokens": 28,
+      "at": "2026-05-24T12:22:22.292Z"
+    },
+    {
+      "file": "c:/MaKandra-/backend/server.js",
+      "action": "edit",
+      "tokens": 462,
+      "at": "2026-05-24T12:22:58.135Z"
+    },
+    {
+      "file": "c:/MaKandra-/backend/server.js",
+      "action": "edit",
+      "tokens": 213,
+      "at": "2026-05-24T12:23:26.173Z"
+    },
+    {
+      "file": "c:/MaKandra-/backend/server.js",
+      "action": "edit",
+      "tokens": 513,
+      "at": "2026-05-24T12:24:50.527Z"
+    },
+    {
+      "file": "c:/MaKandra-/backend/server.js",
+      "action": "edit",
+      "tokens": 355,
+      "at": "2026-05-24T12:25:24.939Z"
+    },
+    {
+      "file": "c:/MaKandra-/backend/server.js",
+      "action": "edit",
+      "tokens": 1200,
+      "at": "2026-05-24T12:26:41.591Z"
+    },
+    {
+      "file": "c:/MaKandra-/script.js",
+      "action": "edit",
+      "tokens": 87,
+      "at": "2026-05-24T12:28:14.643Z"
+    },
+    {
+      "file": "c:/MaKandra-/script.js",
+      "action": "edit",
+      "tokens": 94,
+      "at": "2026-05-24T12:28:46.091Z"
+    },
+    {
+      "file": "c:/MaKandra-/script.js",
+      "action": "edit",
+      "tokens": 31,
+      "at": "2026-05-24T12:29:13.750Z"
+    },
+    {
+      "file": "c:/MaKandra-/script.js",
+      "action": "edit",
+      "tokens": 136,
+      "at": "2026-05-24T12:29:36.824Z"
+    },
+    {
+      "file": "c:/MaKandra-/script.js",
+      "action": "edit",
+      "tokens": 53,
+      "at": "2026-05-24T12:30:07.547Z"
+    },
+    {
+      "file": "c:/MaKandra-/script.js",
+      "action": "edit",
+      "tokens": 140,
+      "at": "2026-05-24T12:30:38.853Z"
+    },
+    {
+      "file": "c:/MaKandra-/script.js",
+      "action": "edit",
+      "tokens": 32,
+      "at": "2026-05-24T12:31:58.142Z"
+    },
+    {
+      "file": "c:/MaKandra-/script.js",
+      "action": "edit",
+      "tokens": 468,
+      "at": "2026-05-24T12:33:20.145Z"
+    },
+    {
+      "file": "c:/MaKandra-/script.js",
+      "action": "edit",
+      "tokens": 35,
+      "at": "2026-05-24T12:33:58.083Z"
+    },
+    {
+      "file": "c:/MaKandra-/script.js",
+      "action": "edit",
+      "tokens": 130,
+      "at": "2026-05-24T12:34:36.958Z"
+    },
+    {
+      "file": "c:/MaKandra-/script.js",
+      "action": "edit",
+      "tokens": 289,
+      "at": "2026-05-24T12:36:00.602Z"
+    },
+    {
+      "file": "c:/MaKandra-/script.js",
+      "action": "edit",
+      "tokens": 57,
+      "at": "2026-05-24T12:36:33.647Z"
+    },
+    {
+      "file": "c:/MaKandra-/script.js",
+      "action": "edit",
+      "tokens": 134,
+      "at": "2026-05-24T12:36:55.819Z"
+    },
+    {
+      "file": "c:/MaKandra-/script.js",
+      "action": "edit",
+      "tokens": 547,
+      "at": "2026-05-24T12:38:13.069Z"
+    },
+    {
+      "file": "c:/MaKandra-/script.js",
+      "action": "edit",
+      "tokens": 134,
+      "at": "2026-05-24T12:38:48.273Z"
+    },
+    {
+      "file": "c:/MaKandra-/script.js",
+      "action": "edit",
+      "tokens": 387,
+      "at": "2026-05-24T12:39:19.135Z"
+    },
+    {
+      "file": "c:/MaKandra-/index.html",
+      "action": "edit",
+      "tokens": 35,
+      "at": "2026-05-24T12:40:04.867Z"
+    },
+    {
+      "file": "c:/MaKandra-/index.html",
+      "action": "edit",
+      "tokens": 30,
+      "at": "2026-05-24T12:40:43.983Z"
     }
   ],
   "edit_counts": {
-    "script.js": 3,
-    "backend/server.js": 2,
-    "backend/migrations/001_create_missing_tables.sql": 1
+    "script.js": 19,
+    "backend/server.js": 10,
+    "backend/migrations/001_create_missing_tables.sql": 1,
+    "backend/migrations/002_separate_names.sql": 1,
+    "backend/migrations/003_normalize_users.sql": 1,
+    "backend/migrations/004_user_roles.sql": 1,
+    "index.html": 2
   },
   "anatomy_hits": 0,
-  "anatomy_misses": 7,
-  "repeated_reads_warned": 9,
+  "anatomy_misses": 8,
+  "repeated_reads_warned": 14,
   "cerebrum_warnings": 0,
-  "stop_count": 1
+  "stop_count": 2
 }

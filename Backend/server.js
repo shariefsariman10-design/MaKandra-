@@ -75,15 +75,54 @@ async function requireAdmin(req, res, next) {
 }
 
 // ─────────────────────────────────────────
+// HELPERS — USER PAYLOAD
+// ─────────────────────────────────────────
+
+/** Consistent user shape returned by signup & login. */
+function buildUserPayload(u) {
+  return {
+    id:            u.id,
+    name:          u.name,
+    first_name:    u.first_name  || null,
+    last_name:     u.last_name   || null,
+    email:         u.email,
+    role:          u.role,
+    role_id:       u.role_id     || null,
+    buurt:         u.buurt,
+    category:      u.category    || null,
+    experience:    u.experience  || null,
+    bio:           u.bio         || null,
+    hourly_rate:   u.hourly_rate || null,
+    phone:         u.phone       || null,
+    working_hours: u.working_hours || null,
+    profile_picture: u.profile_picture || null,
+    is_available:  u.is_available ?? 1,
+    is_admin:      u.is_admin    || 0,
+  };
+}
+
+// ─────────────────────────────────────────
 // AUTH
 // ─────────────────────────────────────────
 
 // SIGNUP
 app.post('/signup', async (req, res) => {
   try {
-    const { name, email, password, role, buurt, category, experience, bio, hourly_rate, phone, working_hours } = req.body;
+    const {
+      first_name, last_name,
+      name: rawName,                 // legacy: combined name from old clients
+      email, password, role, buurt,
+      category, experience, bio, hourly_rate, phone, working_hours,
+    } = req.body;
 
-    if (!name || !name.trim())     return res.status(400).json({ error: 'Naam is verplicht.' });
+    // Accept either separate names (new) or a combined name (old clients)
+    const fn = (first_name || '').trim();
+    const ln = (last_name  || '').trim();
+    const displayName = fn
+      ? (ln ? fn + ' ' + ln : fn)
+      : (rawName || '').trim();
+
+    if (!displayName)              return res.status(400).json({ error: 'Naam is verplicht.' });
     if (!email)                    return res.status(400).json({ error: 'E-mailadres is verplicht.' });
     if (!isValidEmail(email))      return res.status(400).json({ error: 'Voer een geldig e-mailadres in.' });
     if (!password)                 return res.status(400).json({ error: 'Wachtwoord is verplicht.' });
@@ -93,16 +132,50 @@ app.post('/signup', async (req, res) => {
 
     const hashed = await bcrypt.hash(password, 10);
 
+    // Resolve role_id from roles table (gracefully null if table not yet seeded)
+    let roleId = null;
+    try {
+      const [roleRows] = await db.query('SELECT id FROM roles WHERE name = ?', [role]);
+      roleId = roleRows.length ? roleRows[0].id : null;
+    } catch { /* roles table may not exist yet on very first boot — skip */ }
+
     const [result] = await db.query(
-      'INSERT INTO users (name, email, password, role, buurt, category, experience, bio, hourly_rate, phone, working_hours) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [name.trim(), email.toLowerCase(), hashed, role, buurt, category || null, experience || null, bio || null, (parseFloat(hourly_rate) || null), phone || null, working_hours || null]
+      `INSERT INTO users
+         (name, first_name, last_name, email, password, role, role_id,
+          buurt, category, experience, bio, hourly_rate, phone, working_hours)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        displayName,
+        fn || null, ln || null,
+        email.toLowerCase(), hashed, role, roleId,
+        buurt,
+        category || null, experience || null, bio || null,
+        (parseFloat(hourly_rate) || null), phone || null, working_hours || null,
+      ]
     );
 
-    // Send a welcome email (informational only — account is already active)
+    // Sync provider_profiles for dienstverleners (gracefully skip if table missing)
+    if (role === 'dienstverlener') {
+      try {
+        await db.query(
+          `INSERT INTO provider_profiles
+             (user_id, category, experience, hourly_rate, phone, working_hours, is_available)
+           VALUES (?, ?, ?, ?, ?, ?, 1)
+           ON DUPLICATE KEY UPDATE
+             category = VALUES(category), experience = VALUES(experience),
+             hourly_rate = VALUES(hourly_rate), phone = VALUES(phone),
+             working_hours = VALUES(working_hours)`,
+          [result.insertId, category || null, experience || null,
+           parseFloat(hourly_rate) || null, phone || null, working_hours || null]
+        );
+      } catch { /* provider_profiles table may not exist yet — skip */ }
+    }
+
+    // Welcome e-mail
     await sendEmail(
       email,
       'Welkom bij MaKandra!',
-      `<h2>Welkom bij MaKandra, ${name}!</h2>
+      `<h2>Welkom bij MaKandra, ${displayName}!</h2>
        <p>Je account is succesvol aangemaakt. Je kunt nu direct inloggen.</p>
        <p style="color:#aaa;font-size:.8rem">Als je dit account niet hebt aangemaakt, neem dan contact met ons op.</p>`
     );
@@ -111,16 +184,7 @@ app.post('/signup', async (req, res) => {
     const u = rows[0];
     res.status(201).json({
       message: 'Account aangemaakt!',
-      user: {
-        id: u.id, name: u.name, email: u.email, role: u.role,
-        buurt: u.buurt, category: u.category || null,
-        experience: u.experience || null, bio: u.bio || null,
-        hourly_rate: u.hourly_rate || null, phone: u.phone || null,
-        working_hours: u.working_hours || null,
-        profile_picture: u.profile_picture || null,
-        is_available: u.is_available ?? 1,
-        is_admin: u.is_admin || 0,
-      },
+      user: buildUserPayload(u),
     });
   } catch (err) {
     if (err.code === 'ER_DUP_ENTRY') {
@@ -191,25 +255,7 @@ app.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Verkeerd e-mailadres of wachtwoord.' });
     }
     const user = rows[0];
-    res.json({
-      message: 'Ingelogd!',
-      user: {
-        id: user.id,
-        name: user.name,
-        role: user.role,
-        email: user.email,
-        category: user.category,
-        experience: user.experience,
-        bio: user.bio,
-        hourly_rate: user.hourly_rate,
-        buurt: user.buurt,
-        phone: user.phone,
-        working_hours: user.working_hours,
-        profile_picture: user.profile_picture,
-        is_available: user.is_available,
-        is_admin: user.is_admin || 0,
-      },
-    });
+    res.json({ message: 'Ingelogd!', user: buildUserPayload(user) });
   } catch (err) {
     res.status(500).json({ error: 'Er is een serverfout opgetreden.' });
   }
@@ -262,14 +308,34 @@ app.get('/categories', async (req, res) => {
 });
 
 // GET dienstverleners (with optional buurt filter)
+// Returns avg_score (Beoordelingsscore), vertrouwenscore, and total_clients.
+//
+// Vertrouwenscore formula:
+//   VS = MIN(100, MIN(60, total_clients × 3) + MIN(40, total_reviews × 4))
+//   • 60 pts max from clients (20 clients = full client share)
+//   • 40 pts max from reviews (10 reviews = full review share)
 app.get('/dienstverleners', async (req, res) => {
   try {
     const { buurt } = req.query;
     let query = `
-      SELECT u.id, u.name, u.email, u.category, u.experience, u.bio, u.hourly_rate, u.buurt,
+      SELECT u.id, u.name, u.first_name, u.last_name,
+             u.email, u.category, u.experience, u.bio, u.hourly_rate, u.buurt,
              u.profile_picture, u.phone, u.working_hours, u.is_available,
-             ROUND(AVG(r.score), 1) AS avg_score,
-             COUNT(r.id) AS review_count
+             ROUND(AVG(r.score), 1)      AS avg_score,
+             COUNT(DISTINCT r.id)        AS review_count,
+             COALESCE((
+               SELECT COUNT(DISTINCT b.klant_id)
+               FROM bookings b
+               WHERE b.dienstverlener_id = u.id AND b.status = 'accepted'
+             ), 0)                       AS total_clients,
+             LEAST(100, ROUND(
+               LEAST(60, COALESCE((
+                 SELECT COUNT(DISTINCT b2.klant_id)
+                 FROM bookings b2
+                 WHERE b2.dienstverlener_id = u.id AND b2.status = 'accepted'
+               ), 0) * 3) +
+               LEAST(40, COUNT(DISTINCT r.id) * 4)
+             ))                          AS vertrouwenscore
       FROM users u
       LEFT JOIN reviews r ON r.provider_id = u.id
       WHERE u.role = ?`;
@@ -286,27 +352,56 @@ app.get('/dienstverleners', async (req, res) => {
   }
 });
 
-// UPDATE dienstverlener profile (name, category, experience, bio, hourly_rate, buurt)
+// UPDATE dienstverlener profile (name / first_name / last_name, category, experience, …)
 app.put('/profile/:id', async (req, res) => {
   try {
-    const { name, category, experience, bio, hourly_rate, buurt, phone, working_hours } = req.body;
-    if (!name || !name.trim()) return res.status(400).json({ error: 'Naam is verplicht.' });
+    const { first_name, last_name, name: rawName, category, experience, bio, hourly_rate, buurt, phone, working_hours } = req.body;
+
+    const fn = (first_name || '').trim();
+    const ln = (last_name  || '').trim();
+    const displayName = fn ? (ln ? fn + ' ' + ln : fn) : (rawName || '').trim();
+
+    if (!displayName) return res.status(400).json({ error: 'Naam is verplicht.' });
+
     await db.query(
-      'UPDATE users SET name=?, category=?, experience=?, bio=?, hourly_rate=?, buurt=?, phone=?, working_hours=? WHERE id=?',
-      [name.trim(), category, experience, bio, (parseFloat(hourly_rate) || null), buurt, phone || null, working_hours || null, req.params.id]
+      'UPDATE users SET name=?, first_name=?, last_name=?, category=?, experience=?, bio=?, hourly_rate=?, buurt=?, phone=?, working_hours=? WHERE id=?',
+      [displayName, fn || null, ln || null, category, experience, bio,
+       (parseFloat(hourly_rate) || null), buurt, phone || null, working_hours || null, req.params.id]
     );
+
+    // Keep provider_profiles in sync
+    try {
+      await db.query(
+        `INSERT INTO provider_profiles (user_id, category, experience, hourly_rate, phone, working_hours)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+           category=VALUES(category), experience=VALUES(experience),
+           hourly_rate=VALUES(hourly_rate), phone=VALUES(phone), working_hours=VALUES(working_hours)`,
+        [req.params.id, category, experience, parseFloat(hourly_rate) || null, phone || null, working_hours || null]
+      );
+    } catch { /* provider_profiles may not exist yet — skip */ }
+
     res.json({ message: 'Profiel bijgewerkt!' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// UPDATE klant profile (name + bio)
+// UPDATE klant profile (name / first_name / last_name + bio)
 app.put('/klant-profile/:id', async (req, res) => {
   try {
-    const { name, bio } = req.body;
-    if (!name || !name.trim()) return res.status(400).json({ error: 'Naam is verplicht.' });
-    await db.query('UPDATE users SET name=?, bio=? WHERE id=?', [name.trim(), bio || null, req.params.id]);
+    const { first_name, last_name, name: rawName, bio } = req.body;
+
+    const fn = (first_name || '').trim();
+    const ln = (last_name  || '').trim();
+    const displayName = fn ? (ln ? fn + ' ' + ln : fn) : (rawName || '').trim();
+
+    if (!displayName) return res.status(400).json({ error: 'Naam is verplicht.' });
+
+    await db.query(
+      'UPDATE users SET name=?, first_name=?, last_name=?, bio=? WHERE id=?',
+      [displayName, fn || null, ln || null, bio || null, req.params.id]
+    );
     res.json({ message: 'Profiel bijgewerkt!' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -751,9 +846,24 @@ app.get('/provider-stats/:id', async (req, res) => {
        ) sub`,
       [req.params.id]
     );
+    const [[rev]] = await db.query(
+      `SELECT COUNT(*) AS total_reviews FROM reviews WHERE provider_id = ?`,
+      [req.params.id]
+    );
+
+    const total_clients  = stats.total_clients     || 0;
+    const total_reviews  = rev.total_reviews       || 0;
+    // Vertrouwenscore: 60 pts from clients (max 20), 40 pts from reviews (max 10)
+    const vertrouwenscore = Math.min(100, Math.round(
+      Math.min(60, total_clients * 3) +
+      Math.min(40, total_reviews * 4)
+    ));
+
     res.json({
-      total_clients:     stats.total_clients     || 0,
-      returning_clients: ret.returning_clients   || 0,
+      total_clients,
+      returning_clients: ret.returning_clients || 0,
+      total_reviews,
+      vertrouwenscore,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1088,6 +1198,37 @@ app.get('/job-responses/:jobId', async (req, res) => {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`);
 
+    // ── roles table (issue 10) ─────────────────────────────────────────────────
+    await db.query(`CREATE TABLE IF NOT EXISTS roles (
+      id          INT          AUTO_INCREMENT PRIMARY KEY,
+      name        VARCHAR(50)  NOT NULL UNIQUE,
+      description VARCHAR(255) NULL,
+      created_at  TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+    )`);
+    await db.query(`INSERT IGNORE INTO roles (name, description) VALUES
+      ('klant',          'Klant — boekt diensten van dienstverleners'),
+      ('dienstverlener', 'Dienstverlener — biedt diensten aan op het platform'),
+      ('admin',          'Beheerder — beheert het platform en alle gebruikers')`);
+
+    // ── user_roles pivot (multi-role future support) ───────────────────────────
+    await db.query(`CREATE TABLE IF NOT EXISTS user_roles (
+      user_id    INT NOT NULL,
+      role_id    INT NOT NULL,
+      granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (user_id, role_id)
+    )`);
+
+    // ── provider_profiles extension table (issue 9) ───────────────────────────
+    await db.query(`CREATE TABLE IF NOT EXISTS provider_profiles (
+      user_id       INT            PRIMARY KEY,
+      category      VARCHAR(100)   NULL,
+      experience    VARCHAR(255)   NULL,
+      hourly_rate   DECIMAL(10,2)  NULL,
+      phone         VARCHAR(50)    NULL,
+      working_hours VARCHAR(500)   NULL,
+      is_available  TINYINT(1)     NOT NULL DEFAULT 1
+    )`);
+
     // Add new columns to users — silently skipped if they already exist
     const alterCols = [
       'ALTER TABLE users ADD COLUMN dnd_mode          TINYINT(1)   NOT NULL DEFAULT 0',
@@ -1098,6 +1239,11 @@ app.get('/job-responses/:jobId', async (req, res) => {
       'ALTER TABLE users ADD COLUMN pw_change_token    VARCHAR(64)  NULL',
       'ALTER TABLE users ADD COLUMN pw_change_hash     VARCHAR(255) NULL',
       'ALTER TABLE users ADD COLUMN pw_change_expires  DATETIME     NULL',
+      // Issue 8 — separate names
+      'ALTER TABLE users ADD COLUMN first_name VARCHAR(100) NULL AFTER name',
+      'ALTER TABLE users ADD COLUMN last_name  VARCHAR(100) NULL AFTER first_name',
+      // Issue 10 — role FK
+      'ALTER TABLE users ADD COLUMN role_id INT NULL',
     ];
     for (const sql of alterCols) {
       try { await db.query(sql); } catch { /* column already exists — skip */ }
@@ -1107,6 +1253,36 @@ app.get('/job-responses/:jobId', async (req, res) => {
     try {
       await db.query('UPDATE users SET email_verified = 1 WHERE email_verified IS NULL OR email_verified = 0');
     } catch { /* column might not exist yet on very first run */ }
+
+    // Populate first_name / last_name for existing rows (idempotent — only NULL rows)
+    try {
+      await db.query(`UPDATE users
+        SET
+          first_name = TRIM(SUBSTRING_INDEX(name, ' ', 1)),
+          last_name  = NULLIF(TRIM(SUBSTRING(name, CHAR_LENGTH(SUBSTRING_INDEX(name, ' ', 1)) + 2)), '')
+        WHERE first_name IS NULL AND name IS NOT NULL AND name != ''`);
+    } catch { /* skip */ }
+
+    // Populate role_id from role string (idempotent — only NULL rows)
+    try {
+      await db.query(`UPDATE users u
+        JOIN roles r ON r.name = u.role
+        SET u.role_id = r.id
+        WHERE u.role_id IS NULL`);
+    } catch { /* roles table may not be ready yet — skip */ }
+
+    // Sync provider_profiles from users (idempotent)
+    try {
+      await db.query(`INSERT INTO provider_profiles
+          (user_id, category, experience, hourly_rate, phone, working_hours, is_available)
+        SELECT id, category, experience, hourly_rate, phone, working_hours, COALESCE(is_available, 1)
+        FROM users
+        WHERE role = 'dienstverlener'
+        ON DUPLICATE KEY UPDATE
+          category = VALUES(category), experience = VALUES(experience),
+          hourly_rate = VALUES(hourly_rate), phone = VALUES(phone),
+          working_hours = VALUES(working_hours), is_available = VALUES(is_available)`);
+    } catch { /* skip */ }
 
     console.log('DB init complete — server starting.');
   } catch (e) {
