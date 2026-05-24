@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(Test-Path \"c:\\\\MaKandra-\\\\script.js\")",
-      "Bash(npm install *)"
-    ]
-  }
-}
