@@ -281,7 +281,7 @@ function setNavAvatar() {
   if (currentUser.profile_picture) {
     av.outerHTML = '<img id="nav-avatar" src="' + API + currentUser.profile_picture + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover">';
   } else {
-    av.textContent = ini(currentUser.name);
+    av.outerHTML = '<div class="user-avatar-sm" id="nav-avatar">' + ini(currentUser.name) + '</div>';
   }
 }
 
@@ -356,6 +356,8 @@ function logout() {
   document.getElementById('nav-auth')?.classList.remove('hidden');
   document.getElementById('nav-user')?.classList.add('hidden');
   document.getElementById('user-dropdown')?.classList.add('hidden');
+  // Remove DV-only nav items
+  document.querySelector('.dv-profile-link')?.remove();
   // Re-enable hero search for logged-out visitors
   const heroSearch = document.getElementById('hero-search-box');
   if (heroSearch) heroSearch.style.display = '';
