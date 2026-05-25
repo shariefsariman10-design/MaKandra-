@@ -4,72 +4,51 @@ MaKandra is een platform dat klanten verbindt met lokale dienstverleners in Suri
 
 ---
 
-## Technologieën
+## Technologies
 
 **Frontend**
 - HTML5, CSS3, JavaScript (Vanilla)
-- Gehost via GitHub Pages
+- Hosted via GitHub Pages
 
 **Backend**
-- Node.js met Express.js
-- JWT (JSON Web Tokens) voor authenticatie
-- Bcrypt.js voor wachtwoordhashing
-- Nodemailer voor e-mailverificatie
-- MySQL2 voor databaseverbinding
+- Node.js with Express.js
+- JWT (JSON Web Tokens) for authentication
+- Bcrypt.js for password hashing
+- Nodemailer for email verification
+- MySQL2 for database connection
 
 **Database**
-- MySQL (relationele database)
+- MySQL (relational database)
 
 ---
 
-## Vereisten
+## Requirements
 
-Zorg dat het volgende geïnstalleerd is voordat je begint:
+Make sure the following are installed before you begin:
 
-- [Node.js](https://nodejs.org/) v18 of hoger
-- [npm](https://www.npmjs.com/) v9 of hoger
-- MySQL-server (lokaal of via cloud, bijv. Railway, PlanetScale)
-- Een SMTP-account voor het verzenden van e-mails (bijv. Gmail, Mailtrap)
-
----
-
-## Projectstructuur
-
-```
-/
-├── index.html          # Frontend hoofdpagina
-├── style.css           # Frontend styling
-├── script.js           # Frontend logica
-└── backend/
-    ├── server.js               # Entrypoint van de API
-    ├── config/
-    │   └── db.js               # MySQL databaseverbinding
-    ├── routes/                 # API-routes (auth, bookings, jobs, enz.)
-    ├── middlewares/            # Middleware (authenticatie, foutafhandeling)
-    ├── utils/                  # Hulpfuncties (e-mail, tokens)
-    ├── sql/                    # SQL-bestanden voor databasestructuur en seed data
-    ├── public/                 # Statische bestanden
-    └── .env.example            # Voorbeeld omgevingsvariabelen
-```
+- [Node.js](https://nodejs.org/) v18 or higher
+- [npm](https://www.npmjs.com/) v9 or higher
+- MySQL server (local or cloud-based, e.g. Railway, PlanetScale)
+- An SMTP account for sending emails (e.g. Gmail, Mailtrap)
 
 ---
 
-## Installatie
+## Installation
 
-### 1. Repository klonen
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/Ja1r117/MaKandra-.git
 cd MaKandra-/backend
 ```
 
-### 2. Omgevingsvariabelen instellen
+### 2. Set up environment variables
 
 ```bash
 cp .env.example .env
 ```
 
-Vul de volgende waarden in het `.env`-bestand in:
+Fill in the following values in the `.env` file:
 
 ```env
 DB_HOST=your_database_host
@@ -89,59 +68,80 @@ BACKEND_URL=http://localhost:3000
 FRONTEND_URL=http://localhost:5500
 ```
 
-### 3. Database instellen
-
-Voer de SQL-bestanden uit in de `sql/`-map om tabellen aan te maken en seed data te laden:
-
-```bash
-mysql -u your_user -p your_database < sql/schema.sql
-mysql -u your_user -p your_database < sql/seed.sql
-```
-
-### 4. Afhankelijkheden installeren
+### 3. Install dependencies
 
 ```bash
 npm install
 ```
 
-### 5. Server starten
+### 4. Start the server
 
 ```bash
-# Ontwikkelmodus (met automatisch herladen)
+# Development mode (with auto-reload)
 npm run dev
 
-# Productiemodus
+# Production mode
 npm start
 ```
 
-De API is bereikbaar op `http://localhost:3000`.
+The API will be available at `http://localhost:3000`.
 
 ---
 
-## Frontend verbinden met de backend
+## Database Setup
 
-In `script.js` staat de API-basis URL:
+### 1. Create the database
 
-- Lokaal: `http://localhost:3000`
-- Productie: vervang door de URL van jouw gedeployde backend
+```sql
+CREATE DATABASE makandra;
+```
+
+### 2. Run the schema and seed files
+
+```bash
+mysql -u your_user -p makandra < sql/schema.sql
+mysql -u your_user -p makandra < sql/seed.sql
+```
+
+This will create all required tables (users, bookings, jobs, messages, reviews, etc.) and populate them with initial data.
+
+### 3. Configuration
+
+The backend reads database settings from environment variables defined in `.env`:
+
+| Variable | Description |
+|----------|-------------|
+| `DB_HOST` | Database host (e.g. localhost) |
+| `DB_USER` | Database username |
+| `DB_PASSWORD` | Database password |
+| `DB_NAME` | Database name |
+| `DB_PORT` | Database port (default: 3306) |
 
 ---
 
-## Deployment
+## Usage
 
-De backend kan worden gedeployed op:
+### API Endpoints
 
-- [Railway](https://railway.app/)
-- [Render](https://render.com/)
-- [Heroku](https://heroku.com/)
-- [DigitalOcean](https://www.digitalocean.com/)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/auth/signup` | Register a new user |
+| POST | `/auth/login` | Login and receive JWT token |
+| POST | `/auth/forgot-password` | Request password reset email |
+| POST | `/auth/reset-password` | Reset password with token |
+| GET | `/jobs` | List all available jobs |
+| POST | `/bookings` | Create a new booking |
+| GET | `/providers` | List all service providers |
+| GET | `/reviews` | Get reviews |
 
-> **Let op:** GitHub Pages kan alleen statische bestanden hosten. De Node.js-backend moet apart worden gedeployed.
+### Authentication
 
----
+Protected routes require a JWT token in the `Authorization` header:
 
-## Belangrijk
+```
+Authorization: Bearer <your_token>
+```
 
-- Push **nooit** het `.env`-bestand naar GitHub
-- Zorg dat `JWT_SECRET` een sterke, willekeurige string is
-- Gebruik HTTPS in productie
+The token is returned on successful login via `POST /auth/login`.
+
+### Frontend
