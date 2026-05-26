@@ -1,13 +1,15 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import { db } from '../config/db.js';
 import { sendEmail } from '../utils/email.js';
+import { validateSignup, validateLogin, validatePasswordChange } from '../middleware/validation.js';
 import { genToken, isValidEmail, buildUserPayload, htmlPage, FRONTEND } from '../utils/helpers.js';
 
 const router = express.Router();
 
 // SIGNUP
-router.post('/signup', async (req, res) => {
+router.post('/signup', validateSignup(), async (req, res) => {
   try {
     const {
       first_name, last_name,
@@ -125,29 +127,29 @@ router.post('/resend-verification', async (req, res) => {
 });
 
 // LOGIN
-router.post('/login', async (req, res) => {
+router.post('/login', validateLogin(), async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (!email)    return res.status(400).json({ error: 'E-mailadres is verplicht.' });
-    if (!password) return res.status(400).json({ error: 'Wachtwoord is verplicht.' });
     const [rows] = await db.query('SELECT * FROM users WHERE email = ?', [email.toLowerCase()]);
     if (!rows.length) return res.status(401).json({ error: 'Verkeerd e-mailadres of wachtwoord.' });
     const valid = await bcrypt.compare(password, rows[0].password);
     if (!valid) return res.status(401).json({ error: 'Verkeerd e-mailadres of wachtwoord.' });
-    res.json({ message: 'Ingelogd!', user: buildUserPayload(rows[0]) });
+    
+    const user = buildUserPayload(rows[0]);
+    const token = jwt.sign(user, process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production-env', {
+      expiresIn: '7d',
+    });
+    
+    res.json({ message: 'Ingelogd!', user, token });
   } catch (err) {
     res.status(500).json({ error: 'Er is een serverfout opgetreden.' });
   }
 });
 
 // CHANGE PASSWORD — Step 1: request
-router.post('/change-password/request', async (req, res) => {
+router.post('/change-password/request', validatePasswordChange(), async (req, res) => {
   try {
     const { user_id, current_password, new_password } = req.body;
-    if (!user_id || !current_password || !new_password)
-      return res.status(400).json({ error: 'Alle velden zijn verplicht.' });
-    if (new_password.length < 6)
-      return res.status(400).json({ error: 'Nieuw wachtwoord moet minimaal 6 tekens zijn.' });
     const [rows] = await db.query('SELECT * FROM users WHERE id = ?', [user_id]);
     if (!rows.length) return res.status(404).json({ error: 'Gebruiker niet gevonden.' });
     const valid = await bcrypt.compare(current_password, rows[0].password);

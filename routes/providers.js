@@ -1,10 +1,11 @@
 import express from 'express';
 import { db } from '../config/db.js';
+import { verifyTokenOptional } from '../middleware/auth.js';
 
 const router = express.Router();
 
 // GET platform stats
-router.get('/stats', async (req, res) => {
+router.get('/stats', verifyTokenOptional, async (req, res) => {
   try {
     const [[{ dv_count }]]       = await db.query("SELECT COUNT(*) AS dv_count FROM users WHERE role = 'dienstverlener'");
     const [[{ voltooid_count }]] = await db.query("SELECT COUNT(*) AS voltooid_count FROM bookings WHERE status = 'accepted'");

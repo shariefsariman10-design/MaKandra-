@@ -1,22 +1,8 @@
 import express from 'express';
 import { db } from '../config/db.js';
+import { verifyToken, verifyAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
-
-// Admin middleware (inline — only used here)
-async function requireAdmin(req, res, next) {
-  const userId = req.headers['x-user-id'] || req.body?.requesterId;
-  if (!userId) return res.status(401).json({ error: 'Niet gemachtigd.' });
-  try {
-    const [rows] = await db.query('SELECT is_admin FROM users WHERE id = ?', [userId]);
-    if (!rows.length || !rows[0].is_admin)
-      return res.status(403).json({ error: 'Geen beheerdersrechten.' });
-    req.adminId = userId;
-    next();
-  } catch (err) {
-    res.status(500).json({ error: 'Er is een serverfout opgetreden.' });
-  }
-}
 
 // POST /admin/promote — create first admin (protected by ADMIN_SECRET header)
 router.post('/promote', async (req, res) => {
@@ -34,7 +20,7 @@ router.post('/promote', async (req, res) => {
 });
 
 // GET /admin/users
-router.get('/users', requireAdmin, async (req, res) => {
+router.get('/users', verifyToken, verifyAdmin, async (req, res) => {
   try {
     const [rows] = await db.query(
       'SELECT id, name, email, role, buurt, email_verified, is_admin, created_at FROM users ORDER BY created_at DESC'
@@ -44,7 +30,7 @@ router.get('/users', requireAdmin, async (req, res) => {
 });
 
 // GET /admin/stats
-router.get('/stats', requireAdmin, async (req, res) => {
+router.get('/stats', verifyToken, verifyAdmin, async (req, res) => {
   try {
     const [[{ total_users }]]    = await db.query('SELECT COUNT(*) AS total_users FROM users');
     const [[{ total_klanten }]]  = await db.query("SELECT COUNT(*) AS total_klanten FROM users WHERE role = 'klant'");
@@ -57,9 +43,9 @@ router.get('/stats', requireAdmin, async (req, res) => {
 });
 
 // DELETE /admin/users/:id
-router.delete('/users/:id', requireAdmin, async (req, res) => {
+router.delete('/users/:id', verifyToken, verifyAdmin, async (req, res) => {
   try {
-    if (req.params.id == req.adminId)
+    if (req.params.id == req.user.id)
       return res.status(400).json({ error: 'Je kunt je eigen account niet verwijderen.' });
     await db.query('DELETE FROM users WHERE id = ?', [req.params.id]);
     res.json({ message: 'Gebruiker verwijderd.' });

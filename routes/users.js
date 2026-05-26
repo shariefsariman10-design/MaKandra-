@@ -1,12 +1,13 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import { db } from '../config/db.js';
+import { verifyToken, verifyAdmin } from '../middleware/auth.js';
 import { isValidEmail } from '../utils/helpers.js';
 
 const router = express.Router();
 
 // GET all users (admin use)
-router.get('/users', async (req, res) => {
+router.get('/users', verifyToken, verifyAdmin, async (req, res) => {
   try {
     const [rows] = await db.query('SELECT id, name, email, role, buurt, created_at FROM users');
     res.json(rows);

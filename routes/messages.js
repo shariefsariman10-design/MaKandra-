@@ -1,10 +1,12 @@
 import express from 'express';
 import { db } from '../config/db.js';
+import { verifyToken } from '../middleware/auth.js';
+import { validateMessage } from '../middleware/validation.js';
 
 const router = express.Router();
 
 // GET all conversations for a user
-router.get('/conversations/:userId', async (req, res) => {
+router.get('/conversations/:userId', verifyToken, async (req, res) => {
   try {
     const uid = req.params.userId;
     const [rows] = await db.query(`

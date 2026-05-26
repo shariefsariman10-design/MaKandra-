@@ -6,8 +6,8 @@ import { fileURLToPath } from 'url';
 import 'dotenv/config';
 
 import { db } from './config/db.js';
-import { notFound }     from './middlewares/notFound.js';
-import { errorHandler } from './middlewares/errorHandler.js';
+import { notFound }     from './middleware/notFound.js';
+import { errorHandler } from './middleware/errorHandler.js';
 
 import authRoutes          from './routes/auth.js';
 import userRoutes          from './routes/users.js';
@@ -22,11 +22,11 @@ import jobRoutes           from './routes/jobs.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// ── Ensure uploads directory exists ──────────────────────────────────────────
-const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-  console.log('Created uploads directory:', uploadsDir);
+// ── Ensure public/img directory exists ────────────────────────────────────────
+const publicImgDir = path.join(__dirname, 'public', 'img');
+if (!fs.existsSync(publicImgDir)) {
+  fs.mkdirSync(publicImgDir, { recursive: true });
+  console.log('Created public/img directory:', publicImgDir);
 }
 
 // ── App setup ─────────────────────────────────────────────────────────────────
@@ -34,7 +34,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/',       authRoutes);
@@ -175,6 +174,13 @@ app.use(errorHandler);
     }
 
     try { await db.query('UPDATE users SET email_verified = 1 WHERE email_verified IS NULL OR email_verified = 0'); } catch { /* skip */ }
+    
+    // Migrate image paths from /uploads/ to /img/
+    try {
+      await db.query("UPDATE users SET profile_picture = REPLACE(profile_picture, '/uploads/', '/img/') WHERE profile_picture LIKE '/uploads/%'");
+      await db.query("UPDATE portfolio SET file_path = REPLACE(file_path, '/uploads/', '/img/') WHERE file_path LIKE '/uploads/%'");
+    } catch { /* skip */ }
+    
     try {
       await db.query(`UPDATE users
         SET first_name = TRIM(SUBSTRING_INDEX(name, ' ', 1)),

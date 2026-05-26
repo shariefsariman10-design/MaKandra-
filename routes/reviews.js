@@ -1,14 +1,14 @@
 import express from 'express';
 import { db } from '../config/db.js';
+import { verifyToken } from '../middleware/auth.js';
+import { validateReview } from '../middleware/validation.js';
 
 const router = express.Router();
 
 // POST review
-router.post('/reviews', async (req, res) => {
+router.post('/reviews', verifyToken, validateReview(), async (req, res) => {
   try {
     const { reviewer_id, provider_id, score, text } = req.body;
-    if (!reviewer_id || !provider_id || !score || !text)
-      return res.status(400).json({ error: 'Vul alle velden in.' });
     await db.query(
       'INSERT INTO reviews (reviewer_id, provider_id, score, text) VALUES (?, ?, ?, ?)',
       [reviewer_id, provider_id, score, text]

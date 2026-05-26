@@ -1,14 +1,14 @@
 import express from 'express';
 import { db } from '../config/db.js';
+import { verifyToken } from '../middleware/auth.js';
+import { validateJob } from '../middleware/validation.js';
 
 const router = express.Router();
 
 // CREATE job
-router.post('/jobs', async (req, res) => {
+router.post('/jobs', verifyToken, validateJob(), async (req, res) => {
   try {
     const { klant_id, title, description, category, buurt, budget, date_needed } = req.body;
-    if (!klant_id || !title || !category)
-      return res.status(400).json({ error: 'Vul alle verplichte velden in.' });
     const [result] = await db.query(
       'INSERT INTO jobs (klant_id, title, description, category, buurt, budget, date_needed) VALUES (?, ?, ?, ?, ?, ?, ?)',
       [klant_id, title, description || null, category, buurt || null, budget || null, date_needed || null]

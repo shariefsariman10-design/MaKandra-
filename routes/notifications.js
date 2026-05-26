@@ -1,10 +1,11 @@
 import express from 'express';
 import { db } from '../config/db.js';
+import { verifyToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
 // GET notifications for a user
-router.get('/notifications/:id', async (req, res) => {
+router.get('/notifications/:id', verifyToken, async (req, res) => {
   try {
     const [rows] = await db.query(
       'SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 20',

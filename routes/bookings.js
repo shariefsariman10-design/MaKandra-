@@ -1,15 +1,15 @@
 import express from 'express';
 import { db } from '../config/db.js';
+import { verifyToken } from '../middleware/auth.js';
+import { validateBooking } from '../middleware/validation.js';
 import { formatDur } from '../utils/helpers.js';
 
 const router = express.Router();
 
 // CREATE booking
-router.post('/bookings', async (req, res) => {
+router.post('/bookings', verifyToken, validateBooking(), async (req, res) => {
   try {
     const { klant_id, dienstverlener_id, date, time, duration_minutes, message } = req.body;
-    if (!klant_id || !dienstverlener_id || !date)
-      return res.status(400).json({ error: 'Klant, dienstverlener en datum zijn verplicht.' });
     await db.query(
       'INSERT INTO bookings (klant_id, dienstverlener_id, date, time, duration_minutes, message) VALUES (?, ?, ?, ?, ?, ?)',
       [klant_id, dienstverlener_id, date, time || null, duration_minutes || 60, message || null]
